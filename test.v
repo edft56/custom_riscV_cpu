@@ -25,12 +25,12 @@ endmodule
 //B-type: 1100011(Branch) 
 //U-type: 0110111(LUI), 0010111(AUIPC)
 //J-type: 1101111(JAL)
-module decode(clk,instruction,rs1_data,rs2_data,immediate,branch,branch_op,alu_op,cs,wr,write_reg);
+module decode(clk,instruction,rs1_data,rs2_data,immediate_data,branch,branch_op,alu_op,cs,wr,write_reg,immediate_instr);
 input clk;
 input [31:0] instruction;
 output reg [`WL:0] rs1_data,rs2_data;
-output reg [31:0] immediate;
-output reg branch,cs,wr,write_reg;
+output reg [31:0] immediate_data;
+output reg branch,cs,wr,write_reg,immediate_instr;
 output reg [2:0] branch_op;
 output reg [3:0] alu_op;
 
@@ -58,19 +58,20 @@ wire [4:0] rs2_idx = instruction[24:20];
             begin
                 branch <= 1'b1;
                 branch_op <= funct3;
-                immediate <= {19'd0,instruction[31],instruction[7],instruction[30:25],instruction[11:8],1'b0};
+                immediate_data <= {19'd0,instruction[31],instruction[7],instruction[30:25],instruction[11:8],1'b0};
             end
             7'b0010011: //ALU Immediate
             begin
                 alu_op <= {funct7[5],funct3};
-                immediate <= (funct3 == 001 & funct3 == 101) ? { {20{instruction[31]}} , instruction[31:20] } : { {27{rs2_idx[4]}} , rs2_idx };
+                immediate_instr <= 1'b1;
+                immediate_data <= (funct3 == 001 & funct3 == 101) ? { {20{instruction[31]}} , instruction[31:20] } : { {27{rs2_idx[4]}} , rs2_idx };
                 write_reg <= 1'b1;
             end
             7'b0000011: //LOADS
             begin
                 cs <= 1'b1;
                 wr <= 1'b0;
-                immediate <= { {20{instruction[31]}} , instruction[31:20]};
+                immediate_data <= { {20{instruction[31]}} , instruction[31:20]};
                 write_reg <= 1'b1;
             end
             //7'b1100111: //JALR
@@ -78,7 +79,7 @@ wire [4:0] rs2_idx = instruction[24:20];
             begin
                 cs <= 1'b1;
                 wr <= 1'b1;
-                immediate <= { {20{instruction[31]}} , instruction[31:25] , instruction[11:7]  };
+                immediate_data <= { {20{instruction[31]}} , instruction[31:25] , instruction[11:7]  };
             end
             7'b0110011: //ALU RR
             begin
@@ -92,11 +93,12 @@ wire [4:0] rs2_idx = instruction[24:20];
             begin
                 branch <= branch;
                 branch_op <= branch_op;
-                immediate <= immediate;
+                immediate_data <= immediate_data;
                 cs <= cs;
                 wr <= wr;
                 alu_op <= alu_op;
                 write_reg <= write_reg;
+                immediate_instr <= immediate_instr;
             end
         endcase
 
@@ -104,13 +106,25 @@ wire [4:0] rs2_idx = instruction[24:20];
 endmodule
 
 
-module exec_stage(clk,rs1_data,rs2_data,immediate,branch,branch_op,alu_op,cs_DE,wr_DE,write_reg_DE);
-input clk;
-input [`WL:0] rs1_data,rs2_data,immediate;
-input [3:0] alu_op;
-input [2:0] branch_op;
-input branch, cs_DE, wr_DE, write_reg_DE;
+module exec_stage(  input clk,
+                    input [`WL:0] rs1_data,rs2_data,immediate,
+                    input branch,immediate_instr,
+                    input [2:0] branch_op,
+                    input [3:0] alu_op,
+                    input cs_DE,wr_DE,write_reg_DE);
 
+wire [`WL:0] alu_input2;
+
+    assign alu_input2 = (branch | immediate_instr) ? immediate : rs2_data;
+
+    alu alu_unit(   .clk(clk),
+                    .in1(rs1_data),
+                    .in2(alu_input2),
+                    .op(alu_op),
+                    .branch(branch),
+                    .branch_op(branch_op),
+                    .out(alu_out),
+                    .take_branch(take_branch));
 
 endmodule
 
@@ -137,7 +151,7 @@ reg [`WL:0] registers [31:0];
 endmodule
 
 
-module alu(clk, in1, in2, op, branch, branch_op, out, lt, ltu, take_branch);
+module alu(clk, in1, in2, op, branch, branch_op, out, take_branch);
 //operations
 //Shift Left Logical    0001
 //Shift Right Logical   0101
@@ -155,14 +169,13 @@ input [3:0] op;
 input branch;
 input [2:0] branch_op;
 output reg [`WL:0] out;
-output reg lt,ltu;
 output reg take_branch;
 
-wire eq_int,lt_int,ltu_int;
+wire [`WL:0] eq_int,lt_int,ltu_int;
 
-    assign eq_int = in1 == in2;
-    assign lt_int = in1 < in2;
-    assign ltu_int = $signed(in1) < $signed(in2);
+    assign eq_int = { 31'd0 , in1 == in2 };
+    assign lt_int = { 31'd0 , in1 < in2 };
+    assign ltu_int = { 31'd0 , $signed(in1) < $signed(in2) };
 
     always @(negedge clk)
     begin
@@ -188,8 +201,6 @@ wire eq_int,lt_int,ltu_int;
             default: take_branch <= take_branch;
         endcase
 
-        lt <= lt_int;
-        ltu <= ltu_int;
     end
 
 
