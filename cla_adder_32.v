@@ -108,7 +108,7 @@ integer i;
 endmodule
 
 
-module claAdder32(  input [31:0] x,
+module cla_adder_32(  input [31:0] x,
                     input [31:0] y,
                     input sub,
                     output [31:0] sum,
@@ -130,7 +130,7 @@ wire [31:0] y_final;
     generate
         for(i=0; i<8; i=i+1) begin
             claAdder4 CLA4_0(   .x( x[4*(i+1)-1 : 4*i] ),
-                                .y( y[4*(i+1)-1 : 4*i] ),
+                                .y( y_final[4*(i+1)-1 : 4*i] ),
                                 .c_in( C_int[i] ),
                                 .sum( sum[4*(i+1)-1 : 4*i] ),
                                 .c_out( ),
