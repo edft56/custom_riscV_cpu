@@ -110,16 +110,20 @@ endmodule
 
 module claAdder32(  input [31:0] x,
                     input [31:0] y,
-                    input c_in,
+                    input sub,
                     output [31:0] sum,
                     output c_out
                     );
 
 wire [7:0] C_int;
 wire [7:0] P_int, G_int;
+wire [31:0] y_final;
 
-    assign C_int[0] = c_in;
+    assign C_int[0] = sub;
     assign c_out = C_int[7];
+
+    assign y_final = y ^ {32{sub}};
+
 
     genvar i;
 
@@ -137,7 +141,7 @@ wire [7:0] P_int, G_int;
 
     CLA_8 CLA8_0(   .G_in(G_int),
                     .P_in(P_int),
-                    .C_in(c_in),
+                    .C_in(sub),
                     .G_out(),
                     .P_out(),
                     .C_out(C_int[7:1]));
