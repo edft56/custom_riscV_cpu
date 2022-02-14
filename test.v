@@ -3,59 +3,141 @@
 `define WL 31 //word length
 
 
-module riscv_CPU();
+module riscv_core( input clk);
 
-    registerFile regFile(   clk,
-                            write,
-                            rd_idx,
-                            rd_data,
-                            rs1_idx,
-                            rs2_idx,
-                            rs1_data,
-                            rs2_data);
+    wire [`WL:0]   PC;
+    wire [`WL:0]   branch_PC;
+    wire [ 31:0]   fetched_instruction;
+    wire           branch;
 
-    instructionFetch IF_stage0(clk,branch,pc,branch_pc,npc,instruction);
+    wire [ 4:0]    rs1_idx;
+    wire [ 4:0]    rs2_idx;
+    wire [ 4:0]    rd_idx_DE;
+    wire [`WL:0]   rd_data;
+    wire [`WL:0]   rs1_data;
+    wire [`WL:0]   rs2_data_DE;
     
-    decode DE_stage0(clk,instruction,rs1_data,rs2_data,immediate_data,branch,cs,wr,write_reg,immediate_instr,funct3);
+
+    wire [`WL:0]   immediate_data;
+    wire [`WL:0]   rs2_data_EX;
+    wire [ 4:0]    rd_idx_EX;
+    wire           data_mem_cs_DE;
+    wire           data_mem_wr_DE;
+    wire           regFile_write_DE;
+    wire           immediate_instr;
+    wire [ 2:0]    funct3;
+    wire           funct7_bit5;
+
+    wire [`WL:0]   exec_out_EX;
+    wire           take_branch;
+    wire           data_mem_cs_EX;
+    wire           data_mem_wr_EX;
+    wire           regFile_write_EX;
+    wire [ 4:0]    rd_idx_MEM;
+
+    wire           regFile_write_MEM;
+    wire [`WL:0]   exec_out_MEM;
+    wire [`WL:0]   mem_data_out;
+    wire           data_mem_cs_MEM;
+    wire           data_mem_wr_MEM;
+
+    registerFile regFile(   .clk( clk ),
+                            .write( regFile_write_MEM ),
+                            .rd_idx( rd_idx_MEM ),
+                            .rd_data( rd_data ),
+                            .rs1_idx( rs1_idx ),
+                            .rs2_idx( rs2_idx ),
+
+                            .rs1_data( rs1_data ),
+                            .rs2_data( rs2_data_DE )
+                            );
+
+
+
+    instructionFetch IF_stage0( .clk( clk ),
+                                .take_branch( take_branch ),
+                                .pc( PC ),
+                                .branch_pc( branch_PC ),
+
+                                .npc( PC ),
+                                .instruction( fetched_instruction )
+                                );
     
-    exec_stage exec_stage0( clk,
-                rs1_data,rs2_data,immediate,
-                branch,immediate_instr,
-                op,
-                funct7_bit,
-                cs_DE,wr_DE,write_reg_DE,
-                alu_out,
-                take_branch,
-                cs_EX,wr_EX,write_reg_EX
-                );
+    decode DE_stage0(   .clk( clk ),
+                        .instruction( fetched_instruction ),
+                        .PC( PC ),
 
-    mem_stage mem_stage0(  clk,
-                addr,
-                data_in,
-                cs,wr,
-                write_reg_EX,
-                mem_data_out,
-                alu_data_out,
-                write_reg_MEM
-                );
+                        .rs1_idx( rs1_idx ),
+                        .rs2_idx( rs2_idx ),
+                        .rd_idx_DE( rd_idx_DE ),
+                        .immediate_data( immediate_data ),
+                        .branch( branch ),
+                        .data_mem_cs( data_mem_cs_DE ),
+                        .data_mem_wr( data_mem_wr_DE ),
+                        .write_reg( regFile_write_DE ),
+                        .immediate_instr( immediate_instr ),
+                        .funct3( funct3 ),
+                        .funct7_bit ( funct7_bit5 ),
+                        .branch_PC( branch_PC )
+                        );
+    
 
-    wb_stage wb_stage0(   clk,
-                [`WL:0] alu_data,
-                [`WL:0] mem_data,
-                write_reg,cs,wr,
-                [4:0] rd_idx
-                );
+    exec_stage exec_stage0( .clk( clk ),
+                            .rs1_data( rs1_data ),
+                            .rs2_data_DE( rs2_data_DE ),
+                            .immediate_data( immediate_data ),
+                            .branch( branch ),
+                            .immediate_instr( immediate_instr ),
+                            .rd_idx_DE( rd_idx_DE ),
+                            .op( funct3 ),
+                            .funct7_bit( funct7_bit5 ),
+                            .data_mem_cs_DE( data_mem_cs_DE ),
+                            .data_mem_wr_DE( data_mem_wr_DE ),
+                            .write_reg_DE( regFile_write_DE ),
+
+                            .alu_out( exec_out_EX ),
+                            .rs2_data_EX( rs2_data_EX ),
+                            .take_branch( take_branch ),
+                            .data_mem_cs_EX( data_mem_cs_EX ),
+                            .data_mem_wr_EX( data_mem_wr_EX ),
+                            .write_reg_EX( regFile_write_EX ),
+                            .rd_idx_EX( rd_idx_EX )
+                            );
+
+    mem_stage mem_stage0(   .clk( clk ),
+                            .addr( exec_out_EX ),
+                            .data_in( rs2_data_EX ),
+                            .data_mem_cs_EX( data_mem_cs_EX ),
+                            .data_mem_wr_EX( data_mem_wr_EX ),
+                            .write_reg_EX( regFile_write_EX ),
+                            .rd_idx_EX( rd_idx_EX ),
+
+                            .mem_data_out( mem_data_out ),
+                            .alu_data_out( exec_out_MEM ),
+                            .write_reg_MEM( regFile_write_MEM ),
+                            .rd_idx_MEM( rd_idx_MEM ),
+                            .data_mem_cs_MEM ( data_mem_cs_MEM ),
+                            .data_mem_wr_MEM ( data_mem_wr_MEM )
+                        );
+
+    wb_stage wb_stage0( .alu_data( exec_out_MEM ),
+                        .mem_data( mem_data_out ),
+                        .data_mem_cs_MEM( data_mem_cs_MEM ), .data_mem_wr_MEM( data_mem_wr_MEM ),
+                        .rd_data( rd_data )
+                    );
 
 endmodule
 
 
-module instructionFetch(clk,branch,pc,branch_pc,npc,instruction);
-input clk;
-input [31:0] instr_mem [1024:0];
-input [`WL:0] pc,branch_pc;
-input branch;
-output reg [`WL:0] npc;
-output reg [31:0] instruction;
+module instructionFetch(input clk,
+                        input take_branch,
+                        input [`WL:0] pc,
+                        input [`WL:0] branch_pc,
+
+                        output reg [`WL:0] npc,
+                        output reg [31:0] instruction
+                        );
+    
 
     wire [31:0] mem_bus;
 
@@ -67,8 +149,8 @@ output reg [31:0] instruction;
 
     always @(negedge clk)
     begin
-        instruction <= mem_bus[pc];
-        npc <= (branch) ? branch_pc : pc + 4;
+        instruction <= mem_bus;
+        npc <= (take_branch) ? branch_pc : pc + 4;
     end
 
 endmodule
@@ -79,33 +161,37 @@ endmodule
 //B-type: 1100011(Branch) 
 //U-type: 0110111(LUI), 0010111(AUIPC)
 //J-type: 1101111(JAL)
-module decode(clk,instruction,rs1_data,rs2_data,immediate_data,branch,cs,wr,write_reg,immediate_instr,funct3);
-input clk;
-input [31:0] instruction;
-output reg [`WL:0] rs1_data,rs2_data;
-output reg [31:0] immediate_data;
-output reg branch,cs,wr,write_reg,immediate_instr;
-output reg [2:0] funct3;
+module decode(  input clk,
+                input [31:0] instruction,
+                input [`WL:0] PC,
 
-wire [6:0] opcode = instruction[6:0];
-wire [6:0] funct7 = instruction[31:25];
-wire [4:0] rd_idx = instruction[11:7];
-wire [4:0] rs1_idx = instruction[19:15];
-wire [4:0] rs2_idx = instruction[24:20];
+                output [4:0] rs1_idx,rs2_idx,
+                output reg [4:0] rd_idx_DE,
+                output reg [`WL:0] immediate_data,
+                output reg branch,
+                output reg data_mem_cs,data_mem_wr,
+                output reg write_reg,
+                output reg immediate_instr,
+                output reg [2:0] funct3,
+                output reg funct7_bit,
+                output reg [`WL:0] branch_PC
+                );
 
-    registerFile regFile (  .clk(clk), 
-                            .write(0'b0), 
-                            .rd_idx(instruction[11:7]), 
-                            .rd_data(0'b0), 
-                            .rs1_idx(instruction[19:15]), 
-                            .rs2_idx(instruction[24:20]), 
-                            .rs1_data(rs1_data), 
-                            .rs2_data(rs2_data)
-                            );
+    wire [6:0] opcode = instruction[6:0];
+    wire [6:0] funct7 = instruction[31:25];
+
+
+    assign rs1_idx = instruction[19:15];
+    assign rs2_idx = instruction[24:20];
+
 
     always @(negedge clk)
     begin
         funct3 <= instruction[14:12];
+        funct7_bit <= funct7[5];
+        rd_idx_DE <= instruction[11:7]; 
+
+        branch_PC <= PC + {19'd0,instruction[31],instruction[7],instruction[30:25],instruction[11:8],1'b0};
 
         case(opcode)
             7'b1100011: //Branch
@@ -121,16 +207,16 @@ wire [4:0] rs2_idx = instruction[24:20];
             end
             7'b0000011: //LOADS
             begin
-                cs <= 1'b1;
-                wr <= 1'b0;
+                data_mem_cs <= 1'b1;
+                data_mem_wr <= 1'b0;
                 immediate_data <= { {20{instruction[31]}} , instruction[31:20]};
                 write_reg <= 1'b1;
             end
             //7'b1100111: //JALR
             7'b0100011: //STORE
             begin
-                cs <= 1'b1;
-                wr <= 1'b1;
+                data_mem_cs <= 1'b1;
+                data_mem_wr <= 1'b1;
                 immediate_data <= { {20{instruction[31]}} , instruction[31:25] , instruction[11:7]  };
             end
             7'b0110011: //ALU RR
@@ -144,8 +230,8 @@ wire [4:0] rs2_idx = instruction[24:20];
             begin
                 branch <= branch;
                 immediate_data <= immediate_data;
-                cs <= cs;
-                wr <= wr;
+                data_mem_cs <= data_mem_cs;
+                data_mem_wr <= data_mem_wr;
                 write_reg <= write_reg;
                 immediate_instr <= immediate_instr;
             end
@@ -156,19 +242,23 @@ endmodule
 
 
 module exec_stage(  input clk,
-                    input [`WL:0] rs1_data,rs2_data,immediate,
-                    input branch,immediate_instr,
+                    input [`WL:0] rs1_data, rs2_data_DE, immediate_data,
+                    input branch, immediate_instr,
+                    input [4:0] rd_idx_DE,
                     input [2:0] op,
                     input funct7_bit,
-                    input cs_DE,wr_DE,write_reg_DE,
+                    input data_mem_cs_DE, data_mem_wr_DE, write_reg_DE,
+
                     output reg [`WL:0] alu_out,
+                    output reg [`WL:0] rs2_data_EX,
                     output reg take_branch,
-                    output reg cs_EX,wr_EX,write_reg_EX
+                    output reg data_mem_cs_EX, data_mem_wr_EX, write_reg_EX,
+                    output reg [4:0] rd_idx_EX
                     );
 
     wire [`WL:0] alu_input2;
 
-    assign alu_input2 = (branch | immediate_instr) ? immediate : rs2_data;
+    assign alu_input2 = (branch | immediate_instr) ? immediate_data : rs2_data_DE;
 
     alu alu_unit(   .clk(clk),
                     .in1(rs1_data),
@@ -181,9 +271,11 @@ module exec_stage(  input clk,
 
     always @(negedge clk)
     begin
-        cs_EX <= cs_DE;
-        wr_EX <= wr_DE;
+        data_mem_cs_EX <= data_mem_cs_DE;
+        data_mem_wr_EX <= data_mem_wr_DE;
         write_reg_EX <= write_reg_DE;
+        rs2_data_EX <= rs2_data_DE;
+        rd_idx_EX <= rd_idx_DE;
     end
 
 endmodule
@@ -191,48 +283,47 @@ endmodule
 module mem_stage(   input clk,
                     input [`WL:0] addr,
                     input [`WL:0] data_in,
-                    input cs,wr,
+                    input data_mem_cs_EX, data_mem_wr_EX,
                     input write_reg_EX,
+                    input [4:0] rd_idx_EX,
+
                     output reg [`WL:0] mem_data_out,
                     output reg [`WL:0] alu_data_out,
-                    output write_reg_MEM
+                    output write_reg_MEM,
+                    output reg [4:0] rd_idx_MEM,
+                    output reg data_mem_cs_MEM, data_mem_wr_MEM
                     );
 
     wire [`WL:0] mem_bus;
 
-    assign mem_bus = (cs & ~wr) ? data_in : 32'bZ;
+    assign mem_bus = (data_mem_cs_EX & ~data_mem_wr_EX) ? data_in : 32'bZ;
 
     memory mem_0(   .clk(clk),
-                    .wr(wr),
-                    .cs(cs),
+                    .wr(data_mem_wr_EX),
+                    .cs(data_mem_cs_EX),
                     .addr(addr),
                     .mem_bus(mem_bus));
 
     always @(negedge clk)
     begin
-        mem_data_out <= (cs & wr) ? mem_bus : mem_data_out;
+        mem_data_out <= (data_mem_cs_EX & data_mem_wr_EX) ? mem_bus : mem_data_out;
         write_reg_MEM <= write_reg_EX;
         alu_data_out <= data_in;
+        rd_idx_MEM <= rd_idx_EX;
+        data_mem_cs_MEM <= data_mem_cs_EX;
+        data_mem_wr_MEM <= data_mem_wr_EX;
     end
 
 endmodule
 
-module wb_stage(input clk,
-                input [`WL:0] alu_data,
+module wb_stage(input [`WL:0] alu_data,
                 input [`WL:0] mem_data,
-                input write_reg,cs,wr,
-                input [4:0] rd_idx
+                input data_mem_cs_MEM, data_mem_wr_MEM,
+
+                output [`WL:0] rd_data
                 );
     
-    registerFile regFile_0( .clk(clk), 
-                            .write(write_reg), 
-                            .rd_idx(rd_idx), 
-                            .rd_data( (cs & wr) ? mem_data : alu_data ), 
-                            .rs1_idx(), 
-                            .rs2_idx(), 
-                            .rs1_data(), 
-                            .rs2_data()
-                            );
+    assign rd_data = (data_mem_cs_MEM & data_mem_wr_MEM) ? mem_data : alu_data;
 
 endmodule
 
@@ -330,19 +421,6 @@ module alu( input clk,
 endmodule
 
 
-module branch_addr_comp(clk,pc,immediate_offset,branch_pc);
-input clk;
-input [`WL:0] pc,immediate_offset;
-output reg [`WL:0] branch_pc;
-
-    always @(negedge clk)
-    begin
-        branch_pc <= pc + immediate_offset;
-    end
-
-endmodule
-
-
 module memory(clk,wr,cs,addr,mem_bus);
 input clk;
 input wr,cs;
@@ -364,7 +442,7 @@ endmodule
 
 module shift_register(  input clk,
                         input [31:0] in,
-                        output [31:0] out);
+                        output reg [31:0] out);
 
     reg [31:0] registers [7:0];
 
@@ -382,23 +460,6 @@ module shift_register(  input clk,
     end
 endmodule
 
-module write_back_stage(clk,sel_input,write,mem_input,alu_input,rd_idx);
-input clk;
-input sel_input,write;
-input [`WL:0] mem_input,alu_input;
-input [4:0] rd_idx;
-
-    registerFile regFile (  .clk(clk), 
-                            .write(write), 
-                            .rd_idx(rd_idx), 
-                            .rd_data((sel_input) ? mem_input : alu_input), 
-                            .rs1_idx(), 
-                            .rs2_idx(), 
-                            .rs1_data(), 
-                            .rs2_data()
-                            );
-    
-endmodule
 
 
 
