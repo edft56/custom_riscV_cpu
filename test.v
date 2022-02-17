@@ -541,7 +541,7 @@ module alu( input clk,
                     );
 
     barrel_shifter_32 shift(.x(in1),
-                            .shift_by(in2[4:0]),
+                            .shift_by(in2[4:0]), //may need to shift by values > 32
                             .left(~op[2]),
                             .arith(funct7_bit),
                             .out(shifter_out)
