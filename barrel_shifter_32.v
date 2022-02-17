@@ -12,7 +12,7 @@ wire [31:0] stage16,stage8,stage4,stage2,stage1;
 
     wire replace_val = (arith) ? x[31] : 1'b0;
 
-    wire [31:0] in1_sh16 = { {16{replace_val}} , x[31:16] };
+    wire [31:0] in1_sh16 = { {16{replace_val}} , reverse1_out[31:16] };
     wire [31:0] in1_sh8 = { {8{replace_val}} , stage16[31:8] };
     wire [31:0] in1_sh4 = { {4{replace_val}} , stage8[31:4] };
     wire [31:0] in1_sh2 = { {2{replace_val}} , stage4[31:2] };
