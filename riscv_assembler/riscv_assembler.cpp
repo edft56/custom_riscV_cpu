@@ -315,11 +315,14 @@ uint32_t handle_I_type(std::string instruction_name ,std::string rest_of_instr){
 }
 
 
-void assemble(std::string filename){
-    std::ifstream code_file(filename);
+void assemble(std::string code_filename, std::string bin_filename, bool write_file){
+    std::ifstream code_file(code_filename);
 
     if (!code_file) { std::cout << "Unable to open file"<<"\n"; exit(1);}
 
+    std::ofstream bin_file;
+    bin_file.open(bin_filename, std::ios::binary);
+    if (!bin_file) { std::cout << "Unable to open bin file"<<"\n"; exit(1);}
 
 
     std::string line;
@@ -358,12 +361,15 @@ void assemble(std::string filename){
         }
 
         std::cout<<std::bitset<32>(binary_instruction)<<"\n";
-
+        bin_file.write(reinterpret_cast<char*>(&binary_instruction), sizeof(binary_instruction));
+        
     }
+    code_file.close();
+    bin_file.close();
 }
 
 int main(){
-    assemble("test_assembly.txt");
+    assemble("test_assembly2.txt","ass_bin.dat",true);
     return 0;
 }
 

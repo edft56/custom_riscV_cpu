@@ -1,6 +1,0 @@
-addi s1, t2, 65
-add  s0, t1, a2
-lw   a1, 32(s4)
-sw   s1, 32(s4)
-beq  a1, t2, -2
-
