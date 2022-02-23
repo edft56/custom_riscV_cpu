@@ -61,7 +61,7 @@ std::map<std::string, uint32_t> instr_map =   {   // ALU RR
                                                 { "slti" ,  0b00000000000000000010000000010011 },
                                                 { "sltiu",  0b00000000000000000011000000010011 },
                                                 { "xori" ,  0b00000000000000000100000000010011 },
-                                                { "slri" ,  0b00000000000000000101000000010011 },
+                                                { "srli" ,  0b00000000000000000101000000010011 },
                                                 { "srai" ,  0b01000000000000000101000000010011 },
                                                 { "ori"  ,  0b00000000000000000110000000010011 },
                                                 { "andi" ,  0b00000000000000000111000000010011 },
@@ -100,7 +100,7 @@ std::vector<std::string> I_instr = {
 		"ld", "lbu", "lhu",
 		"lwu", "fence", "fence.i", 
 		"slli", "slti", "sltiu", 
-		"xori", "slri", "srai",
+		"xori", "srli", "srai",
 		"ori", "andi", "addiw",
 		"slliw", "srliw", "sraiw", 
 		"jalr", "ecall", "ebreak", 
@@ -360,7 +360,7 @@ void assemble(std::string code_filename, std::string bin_filename, bool write_fi
             instr_length = (instr_start!=-1) ? instr_length + 1 : instr_length;
         }
 
-        std::cout<<std::bitset<32>(binary_instruction)<<"\n";
+        //std::cout<<std::bitset<32>(binary_instruction)<<"\n";
         bin_file.write(reinterpret_cast<char*>(&binary_instruction), sizeof(binary_instruction));
         
     }

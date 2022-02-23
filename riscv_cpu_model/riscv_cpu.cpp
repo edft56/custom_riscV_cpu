@@ -62,8 +62,8 @@ class ALU{
         uint32_t get_alu_result(uint32_t rs1, uint32_t rs2, uint8_t alu_op, bool func7_bit5){
             if( alu_op == 0) return (func7_bit5) ? rs1 - rs2 : rs1 + rs2;
             if( alu_op == 1) return rs1 << rs2;
-            if( alu_op == 2) return rs1  < rs2;
-            if( alu_op == 3) return *(int32_t*)(&rs1) <  *(int32_t*)(&rs2);
+            if( alu_op == 2) return *(int32_t*)(&rs1) <  *(int32_t*)(&rs2);
+            if( alu_op == 3) return rs1  < rs2; 
             if( alu_op == 4) return rs1 ^ rs2;
             if( alu_op == 5) return (func7_bit5) ? *(int32_t*)(&rs1) >> *(int32_t*)(&rs2) : rs1 >> rs2;
             if( alu_op == 6) return rs1 | rs2;
@@ -143,7 +143,7 @@ class RiscvCore{
         uint32_t PC=0;
 
 
-        void handle_branch_instr(uint8_t rs1_idx, uint8_t rs2_idx, uint8_t funct3, uint32_t& PC, uint32_t immediate_data){
+        void handle_branch_instr(uint8_t rs1_idx, uint8_t rs2_idx, uint8_t funct3, uint32_t immediate_data){
             uint32_t rs1_data = reg_file.read(rs1_idx);
             uint32_t rs2_data = reg_file.read(rs2_idx);
             bool take_branch = branch_unit.get_branch_cond(rs1_data, rs2_data, funct3);
@@ -159,6 +159,7 @@ class RiscvCore{
 
         void handle_alu_imm_instr(uint8_t rs1_idx, uint32_t immediate_data, uint8_t rd_idx, uint8_t funct3, bool funct7_bit5){
             uint32_t rs1_data = reg_file.read(rs1_idx);
+            if (funct3==0) funct7_bit5 = false;
             uint32_t alu_result = alu_unit.get_alu_result(rs1_data,immediate_data,funct3,funct7_bit5);
             reg_file.write(rd_idx,alu_result);
         }
@@ -226,7 +227,7 @@ class RiscvCore{
         void instruction_decode_and_execute(uint32_t instruction){
             uint8_t opcode = instruction & 0x7F;
             uint8_t funct3 = (instruction & 0x7000) >> 12;
-            bool funct7_bit5 = ((instruction & 0x40000000) >> 30) == 1;
+            bool funct7_bit5 = ((instruction & 0x40000000) ) != 0;
             uint8_t rs1_idx = (instruction & 0xF8000) >> 15;
             uint8_t rs2_idx = (instruction & 0x1F00000) >> 20;
             uint8_t rd_idx = (instruction & 0xF80) >> 7;
@@ -236,31 +237,32 @@ class RiscvCore{
             switch (opcode) {
                 case 0b01100011: //branch  
                 {             
-                    uint32_t sign_extend = ( ( (instruction & 0x80000000)>>31==1 ) ? 0xFFFFF000 : 0x00000000 );
+                    uint32_t sign_extend = ( ( (instruction & 0x80000000) != 0 ) ? 0xFFFFF000 : 0x00000000 );
                     immediate_data = sign_extend | ((instruction & 0x7E000000)>>20) | ((instruction & 0xF00)>>7) | ((instruction & 0x80)<<4);
-                    handle_branch_instr(rs1_idx,rs2_idx,funct3,PC,immediate_data);
+                    std::cout<<immediate_data<<"\n";
+                    handle_branch_instr(rs1_idx,rs2_idx,funct3,immediate_data);
                     break;
                 }
                 case 0b00010011: //ALU immediate
                 {
-                    uint32_t sign_extend_normal = ( ((instruction & 0x80000000) >> 31 == 1) ? 0xFFFFF800 : 0x00000000 );
+                    uint32_t sign_extend_normal = ( ((instruction & 0x80000000) != 0) ? 0xFFFFF800 : 0x00000000 );
 
                                             //SLLI SRLI SRAI
-                    immediate_data = (funct3 == 1 || funct3 == 5) ? (instruction & 0x01F00000) >> 20  : sign_extend_normal | ((instruction & 0xEFF00000) >> 20);
+                    immediate_data = (funct3 == 1 || funct3 == 5) ? (instruction & 0x01F00000) >> 20  : sign_extend_normal | ((instruction & 0x7FF00000) >> 20);
                     handle_alu_imm_instr(rs1_idx,immediate_data,rd_idx,funct3,funct7_bit5);
                     break;
                 }
                 case 0b00000011: //load  
                 {               
-                    uint32_t sign_extend = ( ((instruction & 0x80000000) >> 31 == 1) ? 0xFFFFF800 : 0x00000000);
-                    immediate_data = sign_extend | ((instruction & 0xEFF00000)>>20);
+                    uint32_t sign_extend = ( ((instruction & 0x80000000) != 0) ? 0xFFFFF800 : 0x00000000);
+                    immediate_data = sign_extend | ((instruction & 0x7FF00000)>>20);
                     handle_load_instr(rs1_idx,immediate_data,rd_idx,funct3);
                     break;
                 }
                 case 0b00100011: //store    
                 {
-                    uint32_t sign_extend = ( ((instruction & 0x80000000) >> 31 == 1) ? 0xFFFFF800 : 0x00000000);
-                    immediate_data = sign_extend | ((instruction & 0xEE000000)>>20) | ((instruction & 0xF80)>>7);
+                    uint32_t sign_extend = ( ((instruction & 0x80000000) != 0) ? 0xFFFFF800 : 0x00000000);
+                    immediate_data = sign_extend | ((instruction & 0xFE000000)>>20) | ((instruction & 0xF80)>>7);
                     handle_store_instr(rs1_idx,immediate_data,rs2_idx,funct3);
                     break;
                 }    
@@ -279,6 +281,7 @@ class RiscvCore{
 
     public:
         void issue_and_execute_instruction(){
+            std::cout<<PC<<"\n";
             uint32_t instruction = instruction_fetch();
             instruction_decode_and_execute(instruction);
         }
@@ -292,7 +295,7 @@ class RiscvCore{
 int main(){
     RiscvCore cpu;
     cpu.initialize_mems();
-    for(int i=0; i<13; i++){
+    for(int i=0; i<28; i++){
         cpu.issue_and_execute_instruction();
     }
     cpu.reg_file.print_all_registers();
