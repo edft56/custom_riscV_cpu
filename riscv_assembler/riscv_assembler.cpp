@@ -289,8 +289,8 @@ uint32_t handle_B_type(std::string instruction_name ,std::string rest_of_instr){
         int32_t immediate_data = stoi(elements_found[2]) * 2; //signed, branch offset is given in instruction forward or bwd so *4 gives bytes
         if (abs(immediate_data*4)>=4096) {std::cout<<"Branch offset greater or equal than 1024"<<"\n"; exit(1);}
 
-        uint32_t immediate_field_1 = (((*(uint32_t*)(&immediate_data)) & 0x800) >> 11) | (((*(uint32_t*)(&immediate_data)) & 0x1E));
-        uint32_t immediate_field_2 = (((*(uint32_t*)(&immediate_data)) & 0x1000) >> 6) | (((*(uint32_t*)(&immediate_data)) & 0x7E0) >> 5);
+        uint32_t immediate_field_1 = (((*(uint32_t*)(&immediate_data)) & 0x400) >> 10) | (((*(uint32_t*)(&immediate_data)) & 0x0F) << 1);
+        uint32_t immediate_field_2 = (((*(uint32_t*)(&immediate_data)) & 0x800) >> 5) | (((*(uint32_t*)(&immediate_data)) & 0x3F0) >> 4);
         
         // std::cout<<std::bitset<32>((((*(uint32_t*)(&immediate_data)) & 0x800) >> 11))<<std::endl;
         // std::cout<<std::bitset<32>(((*(uint32_t*)(&immediate_data)) & 0x1E))<<std::endl;

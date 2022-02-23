@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <bitset>
 
 
 std::string reg_map [32] =   {
@@ -236,9 +237,10 @@ class RiscvCore{
 
             switch (opcode) {
                 case 0b01100011: //branch  
-                {             
-                    uint32_t sign_extend = ( ( (instruction & 0x80000000) != 0 ) ? 0xFFFFF000 : 0x00000000 );
-                    immediate_data = sign_extend | ((instruction & 0x7E000000)>>20) | ((instruction & 0xF00)>>7) | ((instruction & 0x80)<<4);
+                {   
+                    std::cout<<std::bitset<32>(instruction)<<"\n";          
+                    uint32_t sign_extend = ( ( (instruction & 0x80000000) != 0 ) ? 0xFFFFF800 : 0x00000000 );
+                    immediate_data = ( sign_extend | ( ((instruction & 0x7E000000)>>21) | ((instruction & 0xF00)>>8) | ((instruction & 0x80)<<3) ) ) << 1;
                     std::cout<<immediate_data<<"\n";
                     handle_branch_instr(rs1_idx,rs2_idx,funct3,immediate_data);
                     break;
