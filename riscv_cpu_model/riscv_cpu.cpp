@@ -1,5 +1,43 @@
 #include <iostream>
 #include <fstream>
+#include <string>
+
+
+std::string reg_map [32] =   {
+                                               "x0",  
+                                                 "ra", 
+                                                 "sp", 
+                                                 "gp", 
+                                                 "tp", 
+                                                 "t0", 
+                                                 "t1", 
+                                                 "t2", 
+                                                 "s0",  //x8
+                                                   //x8
+                                                 "s1", 
+                                                 "a0", 
+                                                 "a1", 
+                                                 "a2", 
+                                                 "a3", 
+                                                 "a4", 
+                                                 "a5", 
+                                                 "a6", 
+                                                 "a7", 
+                                                 "s2", 
+                                                 "s3", 
+                                                 "s4", 
+                                                 "s5", 
+                                                 "s6", 
+                                                 "s7", 
+                                                 "s8", 
+                                                 "s9", 
+                                                 "s10",
+                                                 "s11",
+                                                 "t3", 
+                                                 "t4", 
+                                                 "t5", 
+                                                 "t6", 
+                                            };
 
 class Branch{
     public:
@@ -85,10 +123,16 @@ class RegisterFile{
         void write(uint8_t reg_idx, uint32_t data_to_write){
             if (reg_idx!=0) reg_file[reg_idx] = data_to_write;
         }
+
+        void print_all_registers(){
+            for(int i=0; i<32; i++){
+                std::cout<<reg_map[i]<<" "<<reg_file[i]<<"\n";
+            }
+        }
 };
 
 class RiscvCore{
-    private:
+    public:
         Ram data_memory{8*1024*1024}; //need to init
         Ram instruction_memory{8*1024*1024}; //need to init
 
@@ -248,7 +292,10 @@ class RiscvCore{
 int main(){
     RiscvCore cpu;
     cpu.initialize_mems();
-    cpu.issue_and_execute_instruction();
+    for(int i=0; i<13; i++){
+        cpu.issue_and_execute_instruction();
+    }
+    cpu.reg_file.print_all_registers();
     return 0;
 }
 
