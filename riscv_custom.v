@@ -3,10 +3,11 @@
 `define WL 31 //word length
 
 
-module riscv_core( input clk);
+module riscv_custom( input clk, input reset);
 
     wire [`WL:0]   PC_IF;
     wire [ 31:0]   fetched_instruction_IF;
+    wire [`WL:0]   delayed_PC_IF; //there is a delay in reading from memory and writing to register, so this is a delayed pc so that pc matched with executing instr
     
     wire [ 4:0]    rs1_idx;
     wire [ 4:0]    rs2_idx;
@@ -28,6 +29,7 @@ module riscv_core( input clk);
     wire [ 6:0]    opcode_DE;
     
     wire [`WL:0]   rs2_data_EX;
+    wire [ 4:0]    rs2_idx_EX;
     wire [ 4:0]    rd_idx_EX;
     wire [`WL:0]   ALU_result_EX;
     wire           take_branch_EX;
@@ -35,6 +37,8 @@ module riscv_core( input clk);
     wire           data_mem_wr_EX;
     wire           regFile_write_EX;
     wire [ 6:0]    opcode_EX;
+    wire [ 2:0]    funct3_EX;
+    wire [`WL:0]   branch_PC_EX;
 
     wire [ 4:0]    rd_idx_MEM;
     wire           regFile_write_MEM;
@@ -44,10 +48,11 @@ module riscv_core( input clk);
     wire           data_mem_wr_MEM;
     wire [ 6:0]    opcode_MEM;
 
-    wire           forward_rs1_EX_DE;
-    wire           forward_rs2_EX_DE;
-    wire           forward_rs1_MEM_DE;
-    wire           forward_rs2_MEM_DE;
+    wire           forward_rs1_MEM_EX;
+    wire           forward_rs2_MEM_EX;
+    wire           forward_rs1_WB_EX;
+    wire           forward_rs2_WB_EX;
+    wire           forward_WB_MEM;
 
     wire           stall_pipeline;
 
@@ -68,17 +73,19 @@ module riscv_core( input clk);
     instructionFetch IF_stage0( .clk( clk ),
                                 .take_branch( take_branch_EX ),
                                 .PC( PC_IF ),
-                                .branch_pc( branch_PC_DE ),
+                                .branch_pc( branch_PC_EX ),
                                 .stall_pipeline( stall_pipeline ),
                                 .prev_instruction( fetched_instruction_IF ),
+                                .reset( reset ),
 
                                 .PC_IF( PC_IF ),
-                                .fetched_instruction_IF( fetched_instruction_IF )
+                                .fetched_instruction_IF( fetched_instruction_IF ),
+                                .delayed_PC_IF ( delayed_PC_IF )
                                 );
     
     decode DE_stage0(   .clk( clk ),
                         .fetched_instruction_IF( fetched_instruction_IF ),
-                        .PC_IF( PC_IF ),
+                        .delayed_PC_IF( delayed_PC_IF ),
                         .stall_pipeline( stall_pipeline ),
 
                         .rs1_idx( rs1_idx ),
@@ -106,18 +113,20 @@ module riscv_core( input clk);
                             .branch_instruction_DE( branch_instruction_DE ),
                             .immediate_instr_DE( immediate_instr_DE ),
                             .rd_idx_DE( rd_idx_DE ),
-                            .op( funct3_DE ),
+                            .funct3_DE( funct3_DE ),
                             .funct7_bit5_DE( funct7_bit5_DE ),
                             .data_mem_cs_DE( data_mem_cs_DE ),
                             .data_mem_wr_DE( data_mem_wr_DE ),
                             .write_reg_DE( regFile_write_DE ),
                             .opcode_DE( opcode_DE ),
-                            .forwarded_data_EX( ALU_result_EX ),
-                            .forwarded_data_MEM( rd_data ),
-                            .forward_rs1_EX_DE( forward_rs1_EX_DE ),
-                            .forward_rs2_EX_DE( forward_rs2_EX_DE ),
-                            .forward_rs1_MEM_DE( forward_rs1_MEM_DE ),
-                            .forward_rs2_MEM_DE( forward_rs2_MEM_DE ), 
+                            .forwarded_data_MEM( ALU_result_EX ),
+                            .forwarded_data_WB( rd_data ),
+                            .forward_rs1_MEM_EX( forward_rs1_MEM_EX ),
+                            .forward_rs2_MEM_EX( forward_rs2_MEM_EX ),
+                            .forward_rs1_WB_EX( forward_rs1_WB_EX ),
+                            .forward_rs2_WB_EX( forward_rs2_WB_EX ), 
+                            .branch_PC_DE( branch_PC_DE ),
+                            .rs2_idx_DE( rs2_idx_DE ),
 
                             .alu_result_EX( ALU_result_EX ),
                             .rs2_data_EX( rs2_data_EX ),
@@ -126,7 +135,10 @@ module riscv_core( input clk);
                             .data_mem_wr_EX( data_mem_wr_EX ),
                             .write_reg_EX( regFile_write_EX ),
                             .rd_idx_EX( rd_idx_EX ),
-                            .opcode_EX( opcode_EX )
+                            .opcode_EX( opcode_EX ),
+                            .funct3_EX( funct3_EX ),
+                            .branch_PC_EX ( branch_PC_EX ),
+                            .rs2_idx_EX( rs2_idx_EX )
                             );
 
     mem_stage mem_stage0(   .clk( clk ),
@@ -137,6 +149,9 @@ module riscv_core( input clk);
                             .write_reg_EX( regFile_write_EX ),
                             .rd_idx_EX( rd_idx_EX ),
                             .opcode_EX( opcode_EX ),
+                            .funct3_EX( funct3_EX ),
+                            .forward_WB_MEM( forward_WB_MEM ),
+                            .forwarded_data_WB( rd_data ),
 
                             .mem_result_MEM( mem_result_MEM ),
                             .alu_result_MEM( ALU_result_MEM ),
@@ -162,11 +177,13 @@ module riscv_core( input clk);
                                 .rd_idx_MEM( rd_idx_MEM ),
                                 .rs1_idx_DE( rs1_idx_DE ),
                                 .rs2_idx_DE( rs2_idx_DE ),
+                                .rs2_idx_EX( rs2_idx_EX ),
 
-                                .forward_rs1_EX_DE( forward_rs1_EX_DE ),
-                                .forward_rs2_EX_DE( forward_rs2_EX_DE ),
-                                .forward_rs1_MEM_DE( forward_rs1_MEM_DE ),
-                                .forward_rs2_MEM_DE( forward_rs2_MEM_DE ) 
+                                .forward_rs1_MEM_EX( forward_rs1_MEM_EX ),
+                                .forward_rs2_MEM_EX( forward_rs2_MEM_EX ),
+                                .forward_rs1_WB_EX( forward_rs1_WB_EX ),
+                                .forward_rs2_WB_EX( forward_rs2_WB_EX ),
+                                .forward_WB_MEM( forward_WB_MEM )
                                 );
 
     interlock_logic intl_logic( .opcode_DE( opcode_DE ),
@@ -189,32 +206,55 @@ module instructionFetch(input clk,
                         input [`WL:0] branch_pc,
                         input stall_pipeline,
                         input [`WL:0] prev_instruction,
+                        input reset,
 
                         output reg [`WL:0] PC_IF,
-                        output reg [31:0] fetched_instruction_IF
+                        output [31:0] fetched_instruction_IF,
+                        output reg [`WL:0] delayed_PC_IF
                         );
     
 
     wire [31:0] mem_bus;
     wire [`WL:0] NPC ;
 
-    memory instr_mem(   .clk(clk),
-                        .wr(1'b0),
-                        .cs(1'b1),
-                        .addr(PC),
-                        .mem_bus(mem_bus));
+    memory #(
+            .MEM_WORD_SIZE( 32 ),
+            .MEM_SIZE_BYTES( 8*1024*1024 ),
+            .ADRESS_WIDTH( 23 ),
+            .initialize(1),
+            .init_file("ass_bin.dat")
+            )
+        instr_mem
+            (   
+            .clk( clk ),
+            .wr( 1'b0 ),
+            .cs( 1'b1 ),
+            .addr( PC>>2 ),
+
+            .mem_bus( mem_bus )
+            );
+
 
     assign NPC = (take_branch) ? branch_pc : PC + 4;
 
     always @(negedge clk)
     begin
-        if(stall_pipeline) begin
-            fetched_instruction_IF <= prev_instruction;
-            PC_IF <= PC;
+        if(!reset) begin
+            PC_IF <= 0;
+            fetched_instruction_IF <= 0;
+            delayed_PC_IF <= 0;
         end
         else begin
-            fetched_instruction_IF <= mem_bus;
-            PC_IF <= NPC;
+            if(stall_pipeline) begin
+                fetched_instruction_IF <= prev_instruction;
+                PC_IF <= PC;
+                delayed_PC_IF <= delayed_PC_IF;
+            end
+            else begin
+                fetched_instruction_IF <= mem_bus;
+                PC_IF <= NPC;
+                delayed_PC_IF <= PC;
+            end
         end
     end
 
@@ -228,7 +268,7 @@ endmodule
 //J-type: 1101111(JAL)
 module decode(  input clk,
                 input [31:0] fetched_instruction_IF,
-                input [`WL:0] PC_IF,
+                input [`WL:0] delayed_PC_IF,
                 input stall_pipeline,
 
                 output [4:0] rs1_idx, rs2_idx,
@@ -247,6 +287,7 @@ module decode(  input clk,
 
     wire [6:0] opcode = (stall_pipeline) ? 7'b0000000 : fetched_instruction_IF[6:0];
     wire [6:0] funct7 = fetched_instruction_IF[31:25];
+    wire [2:0] funct3 = fetched_instruction_IF[14:12];
 
 
     assign rs1_idx = fetched_instruction_IF[19:15];
@@ -255,14 +296,14 @@ module decode(  input clk,
 
     always @(negedge clk)
     begin
-        funct3_DE <= fetched_instruction_IF[14:12];
+        funct3_DE <= funct3;
         funct7_bit5_DE <= funct7[5];
         rd_idx_DE <= fetched_instruction_IF[11:7]; 
         opcode_DE <= opcode;
         rs1_idx_DE <= rs1_idx;
         rs2_idx_DE <= rs2_idx;
-
-        branch_PC_DE <= PC_IF + {19'd0,fetched_instruction_IF[31],fetched_instruction_IF[7],fetched_instruction_IF[30:25],fetched_instruction_IF[11:8],1'b0};
+                                        //Sign Extend                                                                                                   x2
+        branch_PC_DE <= delayed_PC_IF + {{20{fetched_instruction_IF[31]}},fetched_instruction_IF[7],fetched_instruction_IF[30:25],fetched_instruction_IF[11:8],1'b0}; 
 
         case(opcode)
             7'b0000000: //pipeline stall
@@ -271,47 +312,73 @@ module decode(  input clk,
                 data_mem_cs_DE <= 1'b0;
                 data_mem_wr_DE <= 1'b0;
                 write_reg_DE <= 1'b0;
+                immediate_instr_DE <= 1'b0;
             end
             7'b1100011: //Branch
             begin
                 branch_instruction_DE <= 1'b1;
-                immediate_data_DE <= {19'd0,fetched_instruction_IF[31],fetched_instruction_IF[7],fetched_instruction_IF[30:25],fetched_instruction_IF[11:8],1'b0};
+                data_mem_cs_DE <= 1'b0;
+                data_mem_wr_DE <= 1'b0;
+                write_reg_DE <= 1'b0;
+                immediate_instr_DE <= 1'b0;
+
+                immediate_data_DE <= {{20{fetched_instruction_IF[31]}},fetched_instruction_IF[7],fetched_instruction_IF[30:25],fetched_instruction_IF[11:8],1'b0};
             end
             7'b0010011: //ALU Immediate
             begin
-                immediate_instr_DE <= 1'b1;
-                immediate_data_DE <= (fetched_instruction_IF[14:12] == 3'b001 & fetched_instruction_IF[14:12] == 3'b101) ? { {20{fetched_instruction_IF[31]}} , fetched_instruction_IF[31:20] } : { {27{rs2_idx[4]}} , rs2_idx };
+                branch_instruction_DE <= 1'b0;
+                data_mem_cs_DE <= 1'b0;
+                data_mem_wr_DE <= 1'b0;
                 write_reg_DE <= 1'b1;
+                immediate_instr_DE <= 1'b1;
+                                            //SLLI,SRLI,SRAI
+                immediate_data_DE <= (funct3 == 3'b001 & funct3 == 3'b101) ? {27'b0 , rs2_idx} : { {20{fetched_instruction_IF[31]}} , fetched_instruction_IF[31:20] };
             end
             7'b0000011: //LOADS
             begin
+                branch_instruction_DE <= 1'b0;
                 data_mem_cs_DE <= 1'b1;
                 data_mem_wr_DE <= 1'b0;
-                immediate_data_DE <= { {20{fetched_instruction_IF[31]}} , fetched_instruction_IF[31:20]};
                 write_reg_DE <= 1'b1;
+                immediate_instr_DE <= 1'b1;
+
+                immediate_data_DE <= { {20{fetched_instruction_IF[31]}} , fetched_instruction_IF[31:20]}; //sign extend
             end
             //7'b1100111: //JALR
             7'b0100011: //STORE
             begin
+                branch_instruction_DE <= 1'b0;
                 data_mem_cs_DE <= 1'b1;
                 data_mem_wr_DE <= 1'b1;
-                immediate_data_DE <= { {20{fetched_instruction_IF[31]}} , fetched_instruction_IF[31:25] , fetched_instruction_IF[11:7]  };
+                write_reg_DE <= 1'b0;
+                immediate_instr_DE <= 1'b1;
+
+                immediate_data_DE <= { {20{fetched_instruction_IF[31]}} , fetched_instruction_IF[31:25] , fetched_instruction_IF[11:7] };
             end
             7'b0110011: //ALU RR
             begin
+                branch_instruction_DE <= 1'b0;
+                data_mem_cs_DE <= 1'b0;
+                data_mem_wr_DE <= 1'b0;
                 write_reg_DE <= 1'b1;
+                immediate_instr_DE <= 1'b0;
             end
             //7'b1101111: //JAL
-            //7'b0110111: //LUI
+            // 7'b0110111: //LUI
+            // begin
+            //     data_mem_cs_DE <= 1'b0;
+            //     data_mem_wr_DE <= 1'b0;
+            //     write_reg_DE <= 1'b1;
+            // end
             //7'b0010111: //AUIPC
             default:
             begin
-                branch_instruction_DE <= branch_instruction_DE;
-                immediate_data_DE <= immediate_data_DE;
-                data_mem_cs_DE <= data_mem_cs_DE;
-                data_mem_wr_DE <= data_mem_wr_DE;
-                write_reg_DE <= write_reg_DE;
-                immediate_instr_DE <= immediate_instr_DE;
+                branch_instruction_DE <= 0;
+                immediate_data_DE <= 0;
+                data_mem_cs_DE <= 0;
+                data_mem_wr_DE <= 0;
+                write_reg_DE <= 0;
+                immediate_instr_DE <= 0;
             end
         endcase
 
@@ -322,38 +389,41 @@ endmodule
 module exec_stage(  input clk,
                     input [`WL:0] rs1_data_DE, rs2_data_DE, immediate_data_DE,
                     input branch_instruction_DE, immediate_instr_DE,
-                    input [4:0] rd_idx_DE,
-                    input [2:0] op,
+                    input [4:0] rd_idx_DE, rs2_idx_DE,
+                    input [2:0] funct3_DE,
                     input funct7_bit5_DE,
                     input data_mem_cs_DE, data_mem_wr_DE, write_reg_DE,
                     input [6:0] opcode_DE,
-                    input [`WL:0] forwarded_data_EX, forwarded_data_MEM,
-                    input forward_rs1_EX_DE, forward_rs2_EX_DE, forward_rs1_MEM_DE, forward_rs2_MEM_DE, 
+                    input [`WL:0] forwarded_data_MEM, forwarded_data_WB,
+                    input forward_rs1_MEM_EX, forward_rs2_MEM_EX, forward_rs1_WB_EX, forward_rs2_WB_EX, 
+                    input [`WL:0] branch_PC_DE,
 
                     output reg [`WL:0] alu_result_EX,
                     output reg [`WL:0] rs2_data_EX,
                     output reg take_branch_EX,
                     output reg data_mem_cs_EX, data_mem_wr_EX, write_reg_EX,
-                    output reg [4:0] rd_idx_EX,
-                    output reg [6:0] opcode_EX
+                    output reg [4:0] rd_idx_EX, rs2_idx_EX,
+                    output reg [6:0] opcode_EX,
+                    output reg [2:0] funct3_EX,
+                    output reg [`WL:0] branch_PC_EX
                     );
 
     wire [`WL:0] alu_input2;
     wire [`WL:0] alu_input1;
     wire [`WL:0] forwarded_rs1_data, forwarded_rs2_data;
 
-    assign forwarded_rs1_data = (forward_rs1_EX_DE) ? forwarded_data_EX : forwarded_data_MEM;
-    assign forwarded_rs2_data = (forward_rs2_EX_DE) ? forwarded_data_EX : forwarded_data_MEM;
+    assign forwarded_rs1_data = (forward_rs1_MEM_EX) ? forwarded_data_MEM : forwarded_data_WB;
+    assign forwarded_rs2_data = (forward_rs2_MEM_EX) ? forwarded_data_MEM : forwarded_data_WB;
 
-    assign alu_input1 = (forward_rs1_EX_DE | forward_rs1_MEM_DE) ? forwarded_rs1_data : rs1_data_DE;
-    assign alu_input2 = (forward_rs2_EX_DE | forward_rs2_MEM_DE) ? forwarded_rs2_data : ( (branch_instruction_DE | immediate_instr_DE) ? immediate_data_DE : rs2_data_DE );
+    assign alu_input1 = (forward_rs1_MEM_EX | forward_rs1_WB_EX) ? forwarded_rs1_data : rs1_data_DE;
+    assign alu_input2 = (forward_rs2_MEM_EX | forward_rs2_WB_EX) ? forwarded_rs2_data : ( (branch_instruction_DE | immediate_instr_DE) ? immediate_data_DE : rs2_data_DE );
 
     alu alu_unit(   .clk(clk),
                     .in1(alu_input1),
                     .in2(alu_input2),
-                    .op(op),
+                    .op(funct3_DE),
                     .branch(branch_instruction_DE),
-                    .funct7_bit(funct7_bit5_DE),
+                    .funct7_bit( (immediate_instr_DE & funct3_DE==3'b0) ? 1'b0 : funct7_bit5_DE), //funct7 bit5 shouldnt be raised when instr is immediate and funct3 is 0 (could perform sub instead of addi)
                     .out(alu_result_EX),
                     .take_branch(take_branch_EX));
 
@@ -365,6 +435,9 @@ module exec_stage(  input clk,
         rs2_data_EX <= rs2_data_DE;
         rd_idx_EX <= rd_idx_DE;
         opcode_EX <= opcode_DE;
+        funct3_EX <= funct3_DE;
+        branch_PC_EX <= branch_PC_DE;
+        rs2_idx_EX <= rs2_idx_DE;
     end
 
 endmodule
@@ -376,6 +449,9 @@ module mem_stage(   input clk,
                     input write_reg_EX,
                     input [4:0] rd_idx_EX,
                     input [6:0] opcode_EX,
+                    input [2:0] funct3_EX,
+                    input forward_WB_MEM,
+                    input [`WL:0] forwarded_data_WB,
 
                     output reg [`WL:0] mem_result_MEM,
                     output reg [`WL:0] alu_result_MEM,
@@ -385,19 +461,23 @@ module mem_stage(   input clk,
                     output reg [6:0] opcode_MEM
                     );
 
-    wire [`WL:0] mem_bus;
+    wire [`WL:0] mem_out;
+    wire [  1:0] load_store_size = (funct3_EX[1] == 1'b1) ? 2'b11 : ( (funct3_EX[0] == 1'b1) ? 2'b01 : 2'b00 );
+    wire [`WL:0] mem_in = (forward_WB_MEM) ? forwarded_data_WB : rs2_data_EX;
 
-    assign mem_bus = (data_mem_cs_EX & ~data_mem_wr_EX) ? rs2_data_EX : 32'bZ;
 
-    memory mem_0(   .clk(clk),
-                    .wr(data_mem_wr_EX),
-                    .cs(data_mem_cs_EX),
-                    .addr(alu_result_EX),
-                    .mem_bus(mem_bus));
+    mmu mmu_0(  .clk(clk),
+                .addr(alu_result_EX),
+                .data_in( mem_in ),
+                .wr_in(data_mem_wr_EX),
+                .cs_in(data_mem_cs_EX),
+                .size(load_store_size),
+                
+                .data_out(mem_out));
 
     always @(negedge clk)
     begin
-        mem_result_MEM    <= (data_mem_cs_EX & data_mem_wr_EX) ? mem_bus : mem_result_MEM;
+        mem_result_MEM    <= (data_mem_cs_EX & data_mem_wr_EX) ? mem_out : mem_result_MEM;
         write_reg_MEM     <= write_reg_EX;
         alu_result_MEM    <= alu_result_EX;
         rd_idx_MEM        <= rd_idx_EX;
@@ -427,27 +507,32 @@ module forwarding_logic(input [6:0] opcode_DE,
                         input [4:0] rd_idx_MEM,
                         input [4:0] rs1_idx_DE,
                         input [4:0] rs2_idx_DE,
+                        input [4:0] rs2_idx_EX,
 
-                        output forward_rs1_EX_DE,
-                        output forward_rs2_EX_DE,
-                        output forward_rs1_MEM_DE,
-                        output forward_rs2_MEM_DE 
+                        output forward_rs1_MEM_EX,
+                        output forward_rs2_MEM_EX,
+                        output forward_rs1_WB_EX,
+                        output forward_rs2_WB_EX,
+                        output forward_WB_MEM
                         );
 
-    wire opcode_cond_DE_rs1;
-    wire opcode_cond_DE_rs2;
-    wire opcode_cond_EX;
-    wire opcode_cond_MEM;
+    wire dst_op_cond_DE_rs1;
+    wire dst_op_cond_DE_rs2;
+    wire src_op_cond_EX;
+    wire src_op_cond_MEM;
+    wire dst_op_cond_EX;
     //                                  ALU_RR                      ALU_I                       LOAD                            STORE                   BRANCH
-    assign opcode_cond_EX     = (opcode_EX == 7'b0110011)  | (opcode_EX == 7'b0010011);
-    assign opcode_cond_MEM    = (opcode_MEM == 7'b0110011) | (opcode_MEM == 7'b0010011) | (opcode_MEM == 7'b0000011);
-    assign opcode_cond_DE_rs1 = (opcode_DE == 7'b0110011)  | (opcode_DE == 7'b0010011)  | (opcode_DE == 7'b0000011)  | (opcode_DE == 7'b0100011) | (opcode_DE == 7'b1100011);
-    assign opcode_cond_DE_rs2 = (opcode_DE == 7'b0110011);
+    assign src_op_cond_EX     = (opcode_EX == 7'b0110011)  | (opcode_EX == 7'b0010011);
+    assign src_op_cond_MEM    = (opcode_MEM == 7'b0110011) | (opcode_MEM == 7'b0010011) | (opcode_MEM == 7'b0000011);
+    assign dst_op_cond_DE_rs1 = (opcode_DE == 7'b0110011)  | (opcode_DE == 7'b0010011)  | (opcode_DE == 7'b0000011)  | (opcode_DE == 7'b0100011) | (opcode_DE == 7'b1100011);
+    assign dst_op_cond_DE_rs2 = (opcode_DE == 7'b0110011);
+    assign dst_op_cond_EX     =                                                                                        (opcode_EX == 7'b0100011);
 
-    assign forward_rs1_EX_DE  = opcode_cond_EX  & opcode_cond_DE_rs1 & (rd_idx_EX  == rs1_idx_DE);
-    assign forward_rs2_EX_DE  = opcode_cond_EX  & opcode_cond_DE_rs2 & (rd_idx_EX  == rs2_idx_DE);
-    assign forward_rs1_MEM_DE = opcode_cond_MEM & opcode_cond_DE_rs1 & (rd_idx_MEM == rs1_idx_DE);
-    assign forward_rs2_MEM_DE = opcode_cond_MEM & opcode_cond_DE_rs2 & (rd_idx_MEM == rs2_idx_DE);
+    assign forward_rs1_MEM_EX = src_op_cond_EX  & dst_op_cond_DE_rs1 & (rd_idx_EX  == rs1_idx_DE);
+    assign forward_rs2_MEM_EX = src_op_cond_EX  & dst_op_cond_DE_rs2 & (rd_idx_EX  == rs2_idx_DE);
+    assign forward_rs1_WB_EX  = src_op_cond_MEM & dst_op_cond_DE_rs1 & (rd_idx_MEM == rs1_idx_DE);
+    assign forward_rs2_WB_EX  = src_op_cond_MEM & dst_op_cond_DE_rs2 & (rd_idx_MEM == rs2_idx_DE);
+    assign forward_WB_MEM     = dst_op_cond_EX  & (rs2_idx_EX == rd_idx_MEM); 
 
 endmodule
 
@@ -550,28 +635,27 @@ module alu( input clk,
 
     always @(negedge clk)
     begin
-        case( {branch,op} )
-            4'b0000: out <= adder_out;
-            4'b0001: out <= shifter_out;
-            4'b0010: out <= lt_int; 
-            4'b0011: out <= ltu_int; 
-            4'b0100: out <= in1 ^ in2;
-            4'b0101: out <= shifter_out;
-            4'b0110: out <= in1 | in2;
-            4'b0111: out <= in1 & in2;
+        case( op )
+            3'b000: out <= adder_out;
+            3'b001: out <= shifter_out;
+            3'b010: out <= lt_int; 
+            3'b011: out <= ltu_int; 
+            3'b100: out <= in1 ^ in2;
+            3'b101: out <= shifter_out;
+            3'b110: out <= in1 | in2;
+            3'b111: out <= in1 & in2;
+            default: out <= 0;
+        endcase
 
+        case( {branch,op} )
             4'b1000: take_branch <= eq_int;
             4'b1001: take_branch <= ~eq_int;
             4'b1100: take_branch <= lt_int[0];
             4'b1101: take_branch <= ~lt_int[0];
             4'b1110: take_branch <= ltu_int[0];
             4'b1111: take_branch <= ~ltu_int[0];
-
-            default:
-            begin
-                out <= out;
-                take_branch <= take_branch;
-            end
+            default: take_branch <= 0;
+            
         endcase
 
     end
@@ -579,24 +663,84 @@ module alu( input clk,
 
 endmodule
 
+//Assume addreses are 32-bit aligned
+module mmu( input clk,
+            input [`WL:0] addr,
+            input [`WL:0] data_in,
+            input wr_in,
+            input cs_in,
+            input [  1:0] size, //one hot inclusive 00 = 1 byte, 01 = 2 bytes, 11 = 4 bytes 
+
+            output [`WL:0] data_out
+            );
+
+    wire [31:0] mem_bus; // tristate array not supported by verilator :(
+    wire [7:0] mem_out[3:0];
+    wire wr[3:0];
+    wire cs[3:0];
+
+    assign wr[0] = wr_in;
+    assign cs[0] = cs_in;
+    assign wr[1] = wr_in & size[0];
+    assign cs[1] = cs_in & size[0];
+    assign wr[2] = wr_in & size[1];
+    assign cs[2] = cs_in & size[1];
+    assign wr[3] = wr[2];
+    assign cs[3] = cs[2];
+
+    genvar i;
+    generate
+        for(i=0; i<4; i=i+1) begin
+            memory #(
+                .MEM_WORD_SIZE( 8 ),
+                .MEM_SIZE_BYTES( 2*1024*1024 ),
+                .ADRESS_WIDTH( 21 )
+                )
+            bram0
+                (   
+                .clk( clk ),
+                .wr( wr[i] ),
+                .cs( cs[i] ),
+                .addr( addr>>2 ),
+
+                .mem_bus( mem_bus[8*(i+1)-1 : i*8] )
+                );
+
+            assign mem_bus [8*(i+1)-1 : i*8]  = ( cs[i] &  wr[i] ) ? data_in[8*(i+1)-1 : 8*i] : {8{1'bZ}};
+            assign mem_out [i]                = ( cs[i] & ~wr[i] ) ? mem_bus[8*(i+1)-1 : i*8] : 8'd0;
+            assign data_out[8*(i+1)-1 : 8*i]  = mem_out[i];
+        end
+    endgenerate 
+
+endmodule
 
 module memory(  input clk,
                 input wr,
                 input cs,
                 input [`WL:0] addr,
 
-                inout [`WL:0] mem_bus
+                inout [MEM_WORD_SIZE-1:0] mem_bus
                 );
 
-    reg [`WL:0] RAM [2048:0];
-    reg [`WL:0] data_out;
+    parameter MEM_WORD_SIZE = 8; //in bits
+    parameter MEM_SIZE_BYTES = 2*1024*1024; //in bytes
+    parameter ADRESS_WIDTH = 21;
+    parameter initialize = 0;
+    parameter init_file = " ";
 
-    assign mem_bus = (cs & ~wr) ? data_out : 32'bZ;
+    reg [MEM_WORD_SIZE-1:0] RAM       [MEM_SIZE_BYTES-1:0];
+    reg [MEM_WORD_SIZE-1:0] data_out;
 
+    initial begin
+        if(initialize) $readmemb(init_file, RAM);
+    end
+
+    assign mem_bus = (cs & ~wr) ? data_out : {MEM_WORD_SIZE{1'bZ}};
+    
     always @(negedge clk)
     begin
-        if(cs & wr) RAM[addr[11:0]] <= mem_bus;
-        data_out <= RAM[addr[11:0]];
+        if(cs & wr) RAM[addr[ADRESS_WIDTH-1:0]] <= mem_bus;
+        data_out <= RAM[addr[ADRESS_WIDTH-1:0]];
     end
 
 endmodule
