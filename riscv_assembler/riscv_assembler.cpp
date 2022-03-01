@@ -1,3 +1,4 @@
+#include "riscv_assembler.h"
 #include <iostream>
 #include <string>
 #include <map>
@@ -315,13 +316,14 @@ uint32_t handle_I_type(std::string instruction_name ,std::string rest_of_instr){
 }
 
 
-void assemble(std::string code_filename, std::string bin_filename, bool write_file){
+void assemble(std::string code_filename, std::string bin_filename, bool write_file, bool binary_mode=true){
     std::ifstream code_file(code_filename);
 
     if (!code_file) { std::cout << "Unable to open file"<<"\n"; exit(1);}
 
     std::ofstream bin_file;
-    bin_file.open(bin_filename, std::ios::binary);
+    if (binary_mode) bin_file.open(bin_filename, std::ios::binary);
+    else bin_file.open(bin_filename);
     if (!bin_file) { std::cout << "Unable to open bin file"<<"\n"; exit(1);}
 
 
@@ -361,15 +363,16 @@ void assemble(std::string code_filename, std::string bin_filename, bool write_fi
         }
 
         //std::cout<<std::bitset<32>(binary_instruction)<<"\n";
-        bin_file.write(reinterpret_cast<char*>(&binary_instruction), sizeof(binary_instruction));
+        if(binary_mode) bin_file.write(reinterpret_cast<char*>(&binary_instruction), sizeof(binary_instruction));
+        else bin_file<<std::bitset<32>(binary_instruction)<<"\n";
         
     }
     code_file.close();
     bin_file.close();
 }
 
-int main(){
-    assemble("test_assembly2.txt","ass_bin.dat",true);
-    return 0;
-}
+// int main(){
+//     assemble("test_assembly2.txt","ass_bin.dat",true);
+//     return 0;
+// }
 
