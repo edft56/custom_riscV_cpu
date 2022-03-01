@@ -32,13 +32,12 @@ module riscv_custom( input clk, input reset);
     wire [ 4:0]    rs2_idx_EX;
     wire [ 4:0]    rd_idx_EX;
     wire [`WL:0]   ALU_result_EX;
-    wire           take_branch_EX;
+    wire           take_branch;
     wire           data_mem_cs_EX;
     wire           data_mem_wr_EX;
     wire           regFile_write_EX;
     wire [ 6:0]    opcode_EX;
     wire [ 2:0]    funct3_EX;
-    wire [`WL:0]   branch_PC_EX;
 
     wire [ 4:0]    rd_idx_MEM;
     wire           regFile_write_MEM;
@@ -70,23 +69,34 @@ module riscv_custom( input clk, input reset);
 
 
 
-    instructionFetch IF_stage0( .clk( clk ),
-                                .take_branch( take_branch_EX ),
-                                .PC( PC_IF ),
-                                .branch_pc( branch_PC_EX ),
-                                .stall_pipeline( stall_pipeline ),
-                                .prev_instruction( fetched_instruction_IF ),
-                                .reset( reset ),
+    // instructionFetch IF_stage0( .clk( clk ),
+    //                             .take_branch( take_branch_EX ),
+    //                             .PC( PC_IF ),
+    //                             .branch_pc( branch_PC_EX ),
+    //                             .stall_pipeline( stall_pipeline ),
+    //                             .prev_instruction( fetched_instruction_IF ),
+    //                             .reset( reset ),
 
-                                .PC_IF( PC_IF ),
-                                .fetched_instruction_IF( fetched_instruction_IF ),
-                                .delayed_PC_IF ( delayed_PC_IF )
+    //                             .cur_PC_IF( PC_IF ),
+    //                             .fetched_instruction_IF( fetched_instruction_IF ),
+    //                             .instr_PC_IF ( delayed_PC_IF )
+    //                             );
+
+    instructionFetch IF_stage0( .clk_i( clk ),
+                                .take_branch_i( take_branch ),
+                                .branch_PC_i( branch_PC_DE ),
+                                .stall_pipeline_i( stall_pipeline ),
+                                .reset_i( reset ),
+
+                                .PC_IF_o( PC_IF ),
+                                .fetched_instruction_IF_o( fetched_instruction_IF )
                                 );
     
     decode DE_stage0(   .clk( clk ),
                         .fetched_instruction_IF( fetched_instruction_IF ),
-                        .delayed_PC_IF( delayed_PC_IF ),
+                        .delayed_PC_IF( PC_IF ),
                         .stall_pipeline( stall_pipeline ),
+                        .take_branch(take_branch),
 
                         .rs1_idx( rs1_idx ),
                         .rs2_idx( rs2_idx ),
@@ -125,19 +135,17 @@ module riscv_custom( input clk, input reset);
                             .forward_rs2_MEM_EX( forward_rs2_MEM_EX ),
                             .forward_rs1_WB_EX( forward_rs1_WB_EX ),
                             .forward_rs2_WB_EX( forward_rs2_WB_EX ), 
-                            .branch_PC_DE( branch_PC_DE ),
                             .rs2_idx_DE( rs2_idx_DE ),
 
                             .alu_result_EX( ALU_result_EX ),
                             .rs2_data_EX( rs2_data_EX ),
-                            .take_branch_EX( take_branch_EX ),
+                            .take_branch( take_branch ),
                             .data_mem_cs_EX( data_mem_cs_EX ),
                             .data_mem_wr_EX( data_mem_wr_EX ),
                             .write_reg_EX( regFile_write_EX ),
                             .rd_idx_EX( rd_idx_EX ),
                             .opcode_EX( opcode_EX ),
                             .funct3_EX( funct3_EX ),
-                            .branch_PC_EX ( branch_PC_EX ),
                             .rs2_idx_EX( rs2_idx_EX )
                             );
 
@@ -188,9 +196,9 @@ module riscv_custom( input clk, input reset);
 
     interlock_logic intl_logic( .opcode_DE( opcode_DE ),
                                 .opcode_IF( fetched_instruction_IF[6:0] ),
-                                .rs1_idx_DE( rs1_idx_DE ),
-                                .rs2_idx_DE( rs2_idx_DE ),
-                                .rd_idx_IF( fetched_instruction_IF[11:7] ),
+                                .rs1_idx_IF( fetched_instruction_IF[19:15] ),
+                                .rs2_idx_IF( fetched_instruction_IF[24:20] ),
+                                .rd_idx_DE( rd_idx_DE ),
 
                                 .stall_pipeline( stall_pipeline )
                                 );
@@ -200,62 +208,171 @@ module riscv_custom( input clk, input reset);
 endmodule
 
 
-module instructionFetch(input clk,
-                        input take_branch,
-                        input [`WL:0] PC,
-                        input [`WL:0] branch_pc,
-                        input stall_pipeline,
-                        input [`WL:0] prev_instruction,
-                        input reset,
+// module instructionFetch(input clk_i,
+//                         input take_branch_i,
+//                         input [`WL:0] branch_pc_i,
+//                         input stall_pipeline_i,
+//                         input reset_i,
 
-                        output reg [`WL:0] PC_IF,
-                        output [31:0] fetched_instruction_IF,
-                        output reg [`WL:0] delayed_PC_IF
-                        );
+//                         output [`WL:0] cur_PC_IF_o,
+//                         output [ 31:0] fetched_instruction_IF_o,
+//                         output [`WL:0] instr_PC_IF_o
+//                         );
     
 
-    wire [31:0] mem_bus;
-    wire [`WL:0] NPC ;
+//     reg [`WL:0] PC_q;
+//     reg [`WL:0] instruction_q;
+
+//     wire [31:0] mem_instruction;
+//     wire [31:0] buf_instruction;
+//     wire [`WL:0] NPC;
+//     wire [`WL:0] buf_PC;
+//     wire shift;
+//     reg stop_shift;
+    
+//     initial stop_shift = 0;
+
+
+//     shift_register #(
+//                         .WIDTH(64),
+//                         .DEPTH(2)
+//                     )
+//         instr_buffer(
+//                         .clk(clk),
+//                         .in( {PC,mem_instruction} ),
+//                         .shift(shift & !stop_shift),
+
+//                         .out( {buf_PC,buf_instruction} )
+//                     );
+
+//     memory #(
+//             .MEM_WORD_SIZE( 32 ),
+//             .MEM_SIZE_BYTES( 8*1024*1024 ),
+//             .ADRESS_WIDTH( 23 ),
+//             .initialize(1),
+//             .init_file("ass_bin.dat")
+//             )
+//         instr_mem
+//             (   
+//             .clk( clk ),
+//             .wr( 1'b0 ),
+//             .cs( 1'b1 ),
+//             .addr( PC>>2 ),
+//             .data_in(),
+
+//             .data_out( mem_instruction )
+//             );
+
+
+//     assign NPC = (take_branch) ? branch_pc : ( (stall_pipeline) ? PC : PC + 4 );
+//     assign shift = (!reset) ? 1'b0 : 1'b1;
+
+//     always @(negedge clk)
+//     begin
+//         if(!reset) begin
+//             cur_PC_IF <= 0;
+//             fetched_instruction_IF <= 0;
+//             instr_PC_IF <= 0;
+//             stop_shift <= 0;
+//         end
+//         else begin
+//             if(stall_pipeline) begin
+//                 fetched_instruction_IF <= prev_instruction;
+//                 cur_PC_IF <= NPC;
+//                 instr_PC_IF <= instr_PC_IF;
+//                 stop_shift <= 1;
+//             end
+//             else begin
+//                 fetched_instruction_IF <= buf_instruction;
+//                 cur_PC_IF <= NPC;
+//                 instr_PC_IF <= buf_PC;
+//                 stop_shift <= 0;
+//             end
+//         end
+//     end
+
+// endmodule
+
+
+module instructionFetch(input clk_i,
+                        input take_branch_i,
+                        input [`WL:0] branch_PC_i,
+                        input stall_pipeline_i,
+                        input reset_i,
+
+                        output [`WL:0] PC_IF_o,
+                        output [ 31:0] fetched_instruction_IF_o
+                        );
+    
+    reg [`WL:0] PC_q;
+    reg [ 31:0] instruction_buffer_q [1:0];
+    reg [ 31:0] PC_buffer_q [1:0];
+    reg after_stall_q;
+    
+    wire [ 31:0] mem_instruction;
+
 
     memory #(
             .MEM_WORD_SIZE( 32 ),
             .MEM_SIZE_BYTES( 8*1024*1024 ),
             .ADRESS_WIDTH( 23 ),
-            .initialize(1),
+            .initialize( 1 ),
             .init_file("ass_bin.dat")
             )
         instr_mem
             (   
-            .clk( clk ),
+            .clk( clk_i ),
             .wr( 1'b0 ),
             .cs( 1'b1 ),
-            .addr( PC>>2 ),
+            .addr( (take_branch_i) ? branch_PC_i >> 2 : PC_q >> 2 ),
+            .data_in(),
 
-            .mem_bus( mem_bus )
+            .data_out( mem_instruction )
             );
 
+    assign fetched_instruction_IF_o = instruction_buffer_q[0];
+    assign PC_IF_o = PC_buffer_q[0];
 
-    assign NPC = (take_branch) ? branch_pc : PC + 4;
-
-    always @(negedge clk)
+    always @(negedge clk_i)
     begin
-        if(!reset) begin
-            PC_IF <= 0;
-            fetched_instruction_IF <= 0;
-            delayed_PC_IF <= 0;
+        if(!reset_i)  begin   
+            PC_q <= 0;
+            after_stall_q <= 0;
+            instruction_buffer_q[0] <= 0;
+            instruction_buffer_q[1] <= 0;
+        end
+        else if (take_branch_i)  begin
+            PC_q <= branch_PC_i + 4;
+            after_stall_q <= 0;
+            instruction_buffer_q[0] <= mem_instruction;
+            instruction_buffer_q[1] <= mem_instruction;
+            PC_buffer_q[0] <= PC_q;
+            PC_buffer_q[1] <= PC_q;
+        end
+        else if (stall_pipeline_i)  begin
+            PC_q <= PC_q;
+            after_stall_q <= 1;
+            instruction_buffer_q[0] <= instruction_buffer_q[1];
+            instruction_buffer_q[1] <= mem_instruction;
+            PC_buffer_q[0] <= PC_buffer_q[1];
+            PC_buffer_q[1] <= PC_q;
+        end
+        else if (after_stall_q) begin
+            PC_q <= PC_q + 4;
+            after_stall_q <= 0;
+            instruction_buffer_q[0] <= instruction_buffer_q[1];
+            instruction_buffer_q[1] <= mem_instruction;
+            PC_buffer_q[0] <= PC_buffer_q[1];
+            PC_buffer_q[1] <= PC_q;
         end
         else begin
-            if(stall_pipeline) begin
-                fetched_instruction_IF <= prev_instruction;
-                PC_IF <= PC;
-                delayed_PC_IF <= delayed_PC_IF;
-            end
-            else begin
-                fetched_instruction_IF <= mem_bus;
-                PC_IF <= NPC;
-                delayed_PC_IF <= PC;
-            end
-        end
+            PC_q <= PC_q + 4;
+            after_stall_q <= 0;
+            instruction_buffer_q[0] <= mem_instruction;
+            instruction_buffer_q[1] <= mem_instruction;
+            PC_buffer_q[0] <= PC_q;
+            PC_buffer_q[1] <= PC_q;
+        end 
     end
 
 endmodule
@@ -270,6 +387,7 @@ module decode(  input clk,
                 input [31:0] fetched_instruction_IF,
                 input [`WL:0] delayed_PC_IF,
                 input stall_pipeline,
+                input take_branch,
 
                 output [4:0] rs1_idx, rs2_idx,
                 output reg [4:0] rd_idx_DE,
@@ -285,9 +403,11 @@ module decode(  input clk,
                 output reg [4:0] rs1_idx_DE, rs2_idx_DE
                 );
 
-    wire [6:0] opcode = (stall_pipeline) ? 7'b0000000 : fetched_instruction_IF[6:0];
+    wire [6:0] opcode = (stall_pipeline | (branch_taken_stall_timer_q != 1'b0) | take_branch) ? 7'b0000000 : fetched_instruction_IF[6:0];
     wire [6:0] funct7 = fetched_instruction_IF[31:25];
     wire [2:0] funct3 = fetched_instruction_IF[14:12];
+
+    reg branch_taken_stall_timer_q;
 
 
     assign rs1_idx = fetched_instruction_IF[19:15];
@@ -302,6 +422,8 @@ module decode(  input clk,
         opcode_DE <= opcode;
         rs1_idx_DE <= rs1_idx;
         rs2_idx_DE <= rs2_idx;
+        if (take_branch) branch_taken_stall_timer_q <= 1'b1;
+        else branch_taken_stall_timer_q <= branch_taken_stall_timer_q >> 1;
                                         //Sign Extend                                                                                                   x2
         branch_PC_DE <= delayed_PC_IF + {{20{fetched_instruction_IF[31]}},fetched_instruction_IF[7],fetched_instruction_IF[30:25],fetched_instruction_IF[11:8],1'b0}; 
 
@@ -396,16 +518,14 @@ module exec_stage(  input clk,
                     input [6:0] opcode_DE,
                     input [`WL:0] forwarded_data_MEM, forwarded_data_WB,
                     input forward_rs1_MEM_EX, forward_rs2_MEM_EX, forward_rs1_WB_EX, forward_rs2_WB_EX, 
-                    input [`WL:0] branch_PC_DE,
 
                     output reg [`WL:0] alu_result_EX,
                     output reg [`WL:0] rs2_data_EX,
-                    output reg take_branch_EX,
+                    output take_branch,
                     output reg data_mem_cs_EX, data_mem_wr_EX, write_reg_EX,
                     output reg [4:0] rd_idx_EX, rs2_idx_EX,
                     output reg [6:0] opcode_EX,
-                    output reg [2:0] funct3_EX,
-                    output reg [`WL:0] branch_PC_EX
+                    output reg [2:0] funct3_EX
                     );
 
     wire [`WL:0] alu_input2;
@@ -425,7 +545,7 @@ module exec_stage(  input clk,
                     .branch(branch_instruction_DE),
                     .funct7_bit( (immediate_instr_DE & funct3_DE==3'b0) ? 1'b0 : funct7_bit5_DE), //funct7 bit5 shouldnt be raised when instr is immediate and funct3 is 0 (could perform sub instead of addi)
                     .out(alu_result_EX),
-                    .take_branch(take_branch_EX));
+                    .take_branch(take_branch));
 
     always @(negedge clk)
     begin
@@ -436,7 +556,6 @@ module exec_stage(  input clk,
         rd_idx_EX <= rd_idx_DE;
         opcode_EX <= opcode_DE;
         funct3_EX <= funct3_DE;
-        branch_PC_EX <= branch_PC_DE;
         rs2_idx_EX <= rs2_idx_DE;
     end
 
@@ -461,7 +580,7 @@ module mem_stage(   input clk,
                     output reg [6:0] opcode_MEM
                     );
 
-    wire [`WL:0] mem_out;
+    //wire [`WL:0] mem_out;
     wire [  1:0] load_store_size = (funct3_EX[1] == 1'b1) ? 2'b11 : ( (funct3_EX[0] == 1'b1) ? 2'b01 : 2'b00 );
     wire [`WL:0] mem_in = (forward_WB_MEM) ? forwarded_data_WB : rs2_data_EX;
 
@@ -473,11 +592,11 @@ module mem_stage(   input clk,
                 .cs_in(data_mem_cs_EX),
                 .size(load_store_size),
                 
-                .data_out(mem_out));
+                .data_out(mem_result_MEM));
 
     always @(negedge clk)
     begin
-        mem_result_MEM    <= (data_mem_cs_EX & data_mem_wr_EX) ? mem_out : mem_result_MEM;
+        //mem_result_MEM    <= (data_mem_cs_EX & data_mem_wr_EX) ? mem_out : mem_result_MEM;
         write_reg_MEM     <= write_reg_EX;
         alu_result_MEM    <= alu_result_EX;
         rd_idx_MEM        <= rd_idx_EX;
@@ -495,7 +614,7 @@ module wb_stage(input [`WL:0] alu_data_MEM,
                 output [`WL:0] rd_data
                 );
     
-    assign rd_data = (data_mem_cs_MEM & data_mem_wr_MEM) ? mem_data_MEM : alu_data_MEM;
+    assign rd_data = (data_mem_cs_MEM & !data_mem_wr_MEM) ? mem_data_MEM : alu_data_MEM;
 
 endmodule
 
@@ -538,9 +657,9 @@ endmodule
 
 module interlock_logic( input [6:0] opcode_DE,
                         input [6:0] opcode_IF,
-                        input [4:0] rs1_idx_DE,
-                        input [4:0] rs2_idx_DE,
-                        input [4:0] rd_idx_IF,
+                        input [4:0] rs1_idx_IF,
+                        input [4:0] rs2_idx_IF,
+                        input [4:0] rd_idx_DE,
 
                         output stall_pipeline
                         );
@@ -559,8 +678,8 @@ module interlock_logic( input [6:0] opcode_DE,
     assign opcode_cond_rs1    = (opcode_DE == 7'b0000011) & opcode_cond_IF_rs1;
     assign opcode_cond_rs2    = (opcode_DE == 7'b0000011) & opcode_cond_IF_rs2;
 
-    assign rs1_idx_cond       = rd_idx_IF == rs1_idx_DE;
-    assign rs2_idx_cond       = rd_idx_IF == rs2_idx_DE;
+    assign rs1_idx_cond       = rd_idx_DE == rs1_idx_IF;
+    assign rs2_idx_cond       = rd_idx_DE == rs2_idx_IF;
 
     assign stall_pipeline     = ( opcode_cond_rs1 & rs1_idx_cond ) | ( opcode_cond_rs2  & rs2_idx_cond );
 
@@ -646,15 +765,18 @@ module alu( input clk,
             3'b111: out <= in1 & in2;
             default: out <= 0;
         endcase
+    end
 
+    always @* 
+    begin
         case( {branch,op} )
-            4'b1000: take_branch <= eq_int;
-            4'b1001: take_branch <= ~eq_int;
-            4'b1100: take_branch <= lt_int[0];
-            4'b1101: take_branch <= ~lt_int[0];
-            4'b1110: take_branch <= ltu_int[0];
-            4'b1111: take_branch <= ~ltu_int[0];
-            default: take_branch <= 0;
+            4'b1000: take_branch = eq_int;
+            4'b1001: take_branch = ~eq_int;
+            4'b1100: take_branch = lt_int[0];
+            4'b1101: take_branch = ~lt_int[0];
+            4'b1110: take_branch = ltu_int[0];
+            4'b1111: take_branch = ~ltu_int[0];
+            default: take_branch = 0;
             
         endcase
 
@@ -674,8 +796,6 @@ module mmu( input clk,
             output [`WL:0] data_out
             );
 
-    wire [31:0] mem_bus; // tristate array not supported by verilator :(
-    wire [7:0] mem_out[3:0];
     wire wr[3:0];
     wire cs[3:0];
 
@@ -702,13 +822,10 @@ module mmu( input clk,
                 .wr( wr[i] ),
                 .cs( cs[i] ),
                 .addr( addr>>2 ),
+                .data_in( data_in[8*(i+1)-1 : 8*i] ),
 
-                .mem_bus( mem_bus[8*(i+1)-1 : i*8] )
+                .data_out( data_out[8*(i+1)-1 : 8*i] )
                 );
-
-            assign mem_bus [8*(i+1)-1 : i*8]  = ( cs[i] &  wr[i] ) ? data_in[8*(i+1)-1 : 8*i] : {8{1'bZ}};
-            assign mem_out [i]                = ( cs[i] & ~wr[i] ) ? mem_bus[8*(i+1)-1 : i*8] : 8'd0;
-            assign data_out[8*(i+1)-1 : 8*i]  = mem_out[i];
         end
     endgenerate 
 
@@ -718,8 +835,9 @@ module memory(  input clk,
                 input wr,
                 input cs,
                 input [`WL:0] addr,
+                input [MEM_WORD_SIZE-1:0] data_in,
 
-                inout [MEM_WORD_SIZE-1:0] mem_bus
+                output reg [MEM_WORD_SIZE-1:0] data_out
                 );
 
     parameter MEM_WORD_SIZE = 8; //in bits
@@ -729,41 +847,42 @@ module memory(  input clk,
     parameter init_file = " ";
 
     reg [MEM_WORD_SIZE-1:0] RAM       [MEM_SIZE_BYTES-1:0];
-    reg [MEM_WORD_SIZE-1:0] data_out;
 
     initial begin
         if(initialize) $readmemb(init_file, RAM);
     end
 
-    assign mem_bus = (cs & ~wr) ? data_out : {MEM_WORD_SIZE{1'bZ}};
     
     always @(negedge clk)
     begin
-        if(cs & wr) RAM[addr[ADRESS_WIDTH-1:0]] <= mem_bus;
-        data_out <= RAM[addr[ADRESS_WIDTH-1:0]];
+        if(cs &  wr) RAM[addr[ADRESS_WIDTH-1:0]] <= data_in;
+        if(cs & !wr) data_out <= RAM[addr[ADRESS_WIDTH-1:0]];
     end
 
 endmodule
 
-/*module shift_register(  input clk,
-                        input [31:0] in,
-                        output reg [31:0] out);
+module shift_register(  input clk,
+                        input [WIDTH-1:0] in,
+                        input shift,
+                        output [WIDTH-1:0] out);
 
-    reg [31:0] registers [7:0];
+    parameter WIDTH = 32;
+    parameter DEPTH = 2;
+
+    reg [WIDTH-1:0] registers [DEPTH-1:0];
 
     integer i;
 
+    assign out = registers[DEPTH-1];
+    assign registers[0] = in;
+
     always @(negedge clk)
     begin
-        out <= registers[7];
-        registers[1] <= in;
-
-        for(i=0; i<7; i=i+1)
-        begin
-            registers[i] <= registers[i-1];
+        for(i=0; i<DEPTH; i=i+1)begin
+            if(shift) registers[i+1] <= registers[i];
         end
     end
-endmodule*/
+endmodule
 
 
 
