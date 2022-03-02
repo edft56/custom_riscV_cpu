@@ -1,3 +1,8 @@
+addi	ra,   x0,   -1
+sb		ra,   0(x0)
+lb		sp,	  0(x0)
+sh		ra,   0(x0)
+lh		gp,	  0(x0)
 addi 	t0,	  x0,   0
 addi	t1,   x0,   1
 addi 	t2,   x0,   2
@@ -27,3 +32,5 @@ srai	s6,   t6,   1
 addi	t0,   t0,   420
 addi	t5,   t5,   69
 bne		t3,   t4,   -18
+addi	t3,	  t4,	100
+slli		t3,	  t3,	2

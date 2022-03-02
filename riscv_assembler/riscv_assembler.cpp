@@ -97,7 +97,7 @@ std::vector<std::string> R_instr = {
         };
 
 std::vector<std::string> I_instr = {
-		"addi", "lb", "lw",
+		"addi", "lb", "lw", "lh",
 		"ld", "lbu", "lhu",
 		"lwu", "fence", "fence.i", 
 		"slli", "slti", "sltiu", 
@@ -307,7 +307,7 @@ uint32_t handle_B_type(std::string instruction_name ,std::string rest_of_instr){
 
 uint32_t handle_I_type(std::string instruction_name ,std::string rest_of_instr){
 
-    if (instruction_name=="lb" || instruction_name=="lw" || instruction_name=="lb" || instruction_name=="lbu" || instruction_name=="lhu"){
+    if (instruction_name=="lb" || instruction_name=="lw" || instruction_name=="lh" || instruction_name=="lbu" || instruction_name=="lhu"){
         return handle_load(instruction_name, rest_of_instr); 
     }
     else{
