@@ -82,7 +82,9 @@ std::map<std::string, uint32_t> instr_map =   {   // ALU RR
                                                 { "blt"  ,  0b00000000000000000100000001100011 },
                                                 { "bge"  ,  0b00000000000000000101000001100011 },
                                                 { "bltu" ,  0b00000000000000000110000001100011 },
-                                                { "bgeu" ,  0b00000000000000000111000001100011 }
+                                                { "bgeu" ,  0b00000000000000000111000001100011 },
+                                                //LUI
+                                                { "lui"  ,  0b00000000000000000000000000110111 }
                                             };
 
 std::vector<std::string> R_instr = {
@@ -315,6 +317,29 @@ uint32_t handle_I_type(std::string instruction_name ,std::string rest_of_instr){
     }
 }
 
+uint32_t handle_U_type(std::string instruction_name ,std::string rest_of_instr){
+    std::string elements_found[rest_of_instr.length()];
+
+    char sep_list[5] = {' ', ',','(',')','\n'};
+
+    int element_number = string_sep_elements(rest_of_instr,sep_list,5,elements_found);
+
+    // for(int i=0; i<3; i++){
+    //     std::cout<<elements_found[i]<<std::endl;
+    // }
+
+    if (element_number>2) {std::cout<<"Unkown U type Instruction"<<'\n'; exit(1);}
+    else{
+        uint32_t rd_idx = reg_map.at(elements_found[0]);
+        int32_t immediate_data = stoi(elements_found[1]); //unsigned but still stoi
+        if (immediate_data<0 | immediate_data>=1048576) {std::cout<<"LUI Immediate negative or >= 1048576"<<"\n"; exit(1);}
+
+        uint32_t bin_instr = instr_map.at(instruction_name);
+
+        return (bin_instr | (rd_idx << 7)) | (immediate_data<<12);
+    }
+    
+}
 
 void assemble(std::string code_filename, std::string bin_filename, bool write_file, bool binary_mode=true){
     std::ifstream code_file(code_filename);
@@ -354,7 +379,7 @@ void assemble(std::string code_filename, std::string bin_filename, bool write_fi
                 else if ( find_string_in_vector(I_instr,instruction_name) ) binary_instruction = handle_I_type(instruction_name,line.substr(i,line.length()-instr_length));
                 else if ( find_string_in_vector(S_instr,instruction_name) ) binary_instruction = handle_S_type(instruction_name,line.substr(i,line.length()-instr_length));
                 else if ( find_string_in_vector(B_instr,instruction_name) ) binary_instruction = handle_B_type(instruction_name,line.substr(i,line.length()-instr_length));
-                //else if ( find_string_in_vector(U_instr,instruction_name) ) binary_instruction = handle_U_type(instruction_name,line.substr(i,line.length()));
+                else if ( find_string_in_vector(U_instr,instruction_name) ) binary_instruction = handle_U_type(instruction_name,line.substr(i,line.length()-instr_length));
                 //else if ( find_string_in_vector(UJ_instr,instruction_name) ) binary_instruction = handle_UJ_type(instruction_name,line.substr(i,line.length()));
                 else {std::cout<<"Unknown instruction"<<"\n"; exit(1);}
                 break;

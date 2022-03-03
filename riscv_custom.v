@@ -38,6 +38,7 @@ module riscv_custom( input clk, input reset);
     wire           regFile_write_EX;
     wire [ 6:0]    opcode_EX;
     wire [ 2:0]    funct3_EX;
+    wire [`WL:0]   immediate_data_EX;
 
     wire [ 4:0]    rd_idx_MEM;
     wire           regFile_write_MEM;
@@ -47,6 +48,7 @@ module riscv_custom( input clk, input reset);
     wire           data_mem_wr_MEM;
     wire [ 6:0]    opcode_MEM;
     wire [ 2:0]    funct3_MEM;
+    wire [`WL:0]   immediate_data_MEM;
 
     wire           forward_rs1_MEM_EX;
     wire           forward_rs2_MEM_EX;
@@ -132,7 +134,8 @@ module riscv_custom( input clk, input reset);
                             .rd_idx_EX( rd_idx_EX ),
                             .opcode_EX( opcode_EX ),
                             .funct3_EX( funct3_EX ),
-                            .rs2_idx_EX( rs2_idx_EX )
+                            .rs2_idx_EX( rs2_idx_EX ),
+                            .immediate_data_EX( immediate_data_EX )
                             );
 
     mem_stage mem_stage0(   .clk( clk ),
@@ -146,6 +149,7 @@ module riscv_custom( input clk, input reset);
                             .funct3_EX( funct3_EX ),
                             .forward_WB_MEM( forward_WB_MEM ),
                             .forwarded_data_WB( rd_data ),
+                            .immediate_data_EX( immediate_data_EX ),
 
                             .mem_result_MEM( mem_result_MEM ),
                             .alu_result_MEM( ALU_result_MEM ),
@@ -154,7 +158,8 @@ module riscv_custom( input clk, input reset);
                             .data_mem_cs_MEM ( data_mem_cs_MEM ),
                             .data_mem_wr_MEM ( data_mem_wr_MEM ),
                             .opcode_MEM( opcode_MEM ),
-                            .funct3_MEM( funct3_MEM )
+                            .funct3_MEM( funct3_MEM ),
+                            .immediate_data_MEM( immediate_data_MEM )
                         );
 
     wb_stage wb_stage0( .alu_data_MEM( ALU_result_MEM ),
@@ -162,6 +167,8 @@ module riscv_custom( input clk, input reset);
                         .data_mem_cs_MEM( data_mem_cs_MEM ),
                         .data_mem_wr_MEM( data_mem_wr_MEM ),
                         .funct3_MEM( funct3_MEM ),
+                        .immediate_data_MEM( immediate_data_MEM ),
+                        .opcode_MEM( opcode_MEM ),
 
                         .rd_data( rd_data )
                     );
@@ -391,7 +398,16 @@ module decode(  input clk,
                 immediate_instr_DE      <= 1'b0;
             end
             //7'b1101111: //JAL
-            // 7'b0110111: //LUI
+            7'b0110111: //LUI
+            begin
+                branch_instruction_DE   <= 1'b0;
+                data_mem_cs_DE          <= 1'b0;
+                data_mem_wr_DE          <= 1'b0;
+                write_reg_DE            <= 1'b1;
+                immediate_instr_DE      <= 1'b1;
+
+                immediate_data_DE       <= {fetched_instruction_IF[31:12], 12'd0};
+            end
             // begin
             //     data_mem_cs_DE <= 1'b0;
             //     data_mem_wr_DE <= 1'b0;
@@ -430,7 +446,8 @@ module exec_stage(  input clk,
                     output reg data_mem_cs_EX, data_mem_wr_EX, write_reg_EX,
                     output reg [4:0] rd_idx_EX, rs2_idx_EX,
                     output reg [6:0] opcode_EX,
-                    output reg [2:0] funct3_EX
+                    output reg [2:0] funct3_EX,
+                    output reg [`WL:0] immediate_data_EX
                     );
 
     wire [`WL:0] alu_input2;
@@ -462,6 +479,7 @@ module exec_stage(  input clk,
         opcode_EX               <= opcode_DE;
         funct3_EX               <= funct3_DE;
         rs2_idx_EX              <= rs2_idx_DE;
+        immediate_data_EX       <= immediate_data_DE;
     end
 
 endmodule
@@ -476,6 +494,7 @@ module mem_stage(   input clk,
                     input [2:0] funct3_EX,
                     input forward_WB_MEM,
                     input [`WL:0] forwarded_data_WB,
+                    input [`WL:0] immediate_data_EX,
 
                     output [`WL:0] mem_result_MEM,
                     output reg [`WL:0] alu_result_MEM,
@@ -483,7 +502,8 @@ module mem_stage(   input clk,
                     output reg [4:0] rd_idx_MEM,
                     output reg data_mem_cs_MEM, data_mem_wr_MEM,
                     output reg [6:0] opcode_MEM,
-                    output reg [2:0] funct3_MEM
+                    output reg [2:0] funct3_MEM,
+                    output reg [`WL:0] immediate_data_MEM
                     );
 
     //wire [`WL:0] mem_out;
@@ -510,6 +530,7 @@ module mem_stage(   input clk,
         data_mem_wr_MEM          <= data_mem_wr_EX;
         opcode_MEM               <= opcode_EX;
         funct3_MEM               <= funct3_EX;
+        immediate_data_MEM       <= immediate_data_EX;
     end
 
 endmodule
@@ -518,6 +539,8 @@ module wb_stage(input [`WL:0] alu_data_MEM,
                 input [`WL:0] mem_data_MEM,
                 input data_mem_cs_MEM, data_mem_wr_MEM,
                 input [2:0] funct3_MEM,
+                input [`WL:0] immediate_data_MEM,
+                input [6:0] opcode_MEM,
 
                 output [`WL:0] rd_data
                 );
@@ -527,7 +550,7 @@ module wb_stage(input [`WL:0] alu_data_MEM,
 
     wire [`WL:0] mem_data = (funct3_MEM == 3'b000) ? sign_extend_8 : ( (funct3_MEM == 3'b001) ? sign_extend_16 : mem_data_MEM );
 
-    assign rd_data = (data_mem_cs_MEM & !data_mem_wr_MEM) ? mem_data : alu_data_MEM;
+    assign rd_data = (opcode_MEM == 7'b0110111) ? immediate_data_MEM : ( (data_mem_cs_MEM & !data_mem_wr_MEM) ? mem_data : alu_data_MEM );
 
 endmodule
 

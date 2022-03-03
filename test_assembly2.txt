@@ -1,3 +1,4 @@
+lui		ra,	  999999
 addi	ra,   x0,   -1
 sb		ra,   0(x0)
 lb		sp,	  0(x0)
