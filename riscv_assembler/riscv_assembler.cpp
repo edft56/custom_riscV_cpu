@@ -83,8 +83,9 @@ std::map<std::string, uint32_t> instr_map =   {   // ALU RR
                                                 { "bge"  ,  0b00000000000000000101000001100011 },
                                                 { "bltu" ,  0b00000000000000000110000001100011 },
                                                 { "bgeu" ,  0b00000000000000000111000001100011 },
-                                                //LUI
-                                                { "lui"  ,  0b00000000000000000000000000110111 }
+                                                // U-TYPE
+                                                { "lui"  ,  0b00000000000000000000000000110111 },
+                                                { "auipc",  0b00000000000000000000000000010111 }
                                             };
 
 std::vector<std::string> R_instr = {
@@ -332,7 +333,7 @@ uint32_t handle_U_type(std::string instruction_name ,std::string rest_of_instr){
     else{
         uint32_t rd_idx = reg_map.at(elements_found[0]);
         int32_t immediate_data = stoi(elements_found[1]); //unsigned but still stoi
-        if (immediate_data<0 | immediate_data>=1048576) {std::cout<<"LUI Immediate negative or >= 1048576"<<"\n"; exit(1);}
+        if (immediate_data<0 | immediate_data>=1048576) {std::cout<<"U-Type Immediate negative or >= 1048576"<<"\n"; exit(1);}
 
         uint32_t bin_instr = instr_map.at(instruction_name);
 

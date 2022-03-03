@@ -234,7 +234,7 @@ module instructionFetch(input clk_i,
             (   
             .clk( clk_i ),
             .wr( 1'b0 ),
-            .cs( 1'b1 ),
+            .cs( 1'b1 & reset_i ),
             .addr( (take_branch_i) ? branch_PC_i >> 2 : PC_q >> 2 ),
             .data_in(),
 
@@ -317,6 +317,8 @@ module decode(  input clk,
     wire [6:0] opcode = (stall_pipeline | (branch_taken_stall_timer_q != 1'b0) | take_branch) ? 7'b0000000 : fetched_instruction_IF[6:0];
     wire [6:0] funct7 = fetched_instruction_IF[31:25];
     wire [2:0] funct3 = fetched_instruction_IF[14:12];
+    wire [`WL:0] add_to_PC_data;
+    wire [`WL:0] PC_add_result;
 
     reg branch_taken_stall_timer_q;
 
@@ -324,6 +326,9 @@ module decode(  input clk,
     assign rs1_idx = fetched_instruction_IF[19:15];
     assign rs2_idx = fetched_instruction_IF[24:20];
 
+                                                                                                    //Sign Extend                                                                                                     x2
+    assign add_to_PC_data = (opcode == 7'b0010111) ? {fetched_instruction_IF[31:12], 12'd0} : {{20{fetched_instruction_IF[31]}},fetched_instruction_IF[7],fetched_instruction_IF[30:25],fetched_instruction_IF[11:8],1'b0};
+    assign PC_add_result = delayed_PC_IF + add_to_PC_data;
 
     always @(negedge clk)
     begin
@@ -336,7 +341,8 @@ module decode(  input clk,
         if (take_branch) branch_taken_stall_timer_q <= 1'b1;
         else branch_taken_stall_timer_q <= branch_taken_stall_timer_q >> 1;
                                         //Sign Extend                                                                                                   x2
-        branch_PC_DE <= delayed_PC_IF + {{20{fetched_instruction_IF[31]}},fetched_instruction_IF[7],fetched_instruction_IF[30:25],fetched_instruction_IF[11:8],1'b0}; 
+        //branch_PC_DE <= delayed_PC_IF + {{20{fetched_instruction_IF[31]}},fetched_instruction_IF[7],fetched_instruction_IF[30:25],fetched_instruction_IF[11:8],1'b0}; 
+        branch_PC_DE <= PC_add_result;
 
         case(opcode)
             7'b0000000: //pipeline stall
@@ -404,16 +410,20 @@ module decode(  input clk,
                 data_mem_cs_DE          <= 1'b0;
                 data_mem_wr_DE          <= 1'b0;
                 write_reg_DE            <= 1'b1;
-                immediate_instr_DE      <= 1'b1;
+                immediate_instr_DE      <= 1'b0;
 
                 immediate_data_DE       <= {fetched_instruction_IF[31:12], 12'd0};
             end
-            // begin
-            //     data_mem_cs_DE <= 1'b0;
-            //     data_mem_wr_DE <= 1'b0;
-            //     write_reg_DE <= 1'b1;
-            // end
-            //7'b0010111: //AUIPC
+            7'b0010111: //AUIPC
+            begin
+                branch_instruction_DE   <= 1'b0;
+                data_mem_cs_DE          <= 1'b0;
+                data_mem_wr_DE          <= 1'b0;
+                write_reg_DE            <= 1'b1;
+                immediate_instr_DE      <= 1'b0;
+
+                immediate_data_DE       <= PC_add_result;
+            end
             default:
             begin
                 branch_instruction_DE   <= 0;
@@ -550,7 +560,8 @@ module wb_stage(input [`WL:0] alu_data_MEM,
 
     wire [`WL:0] mem_data = (funct3_MEM == 3'b000) ? sign_extend_8 : ( (funct3_MEM == 3'b001) ? sign_extend_16 : mem_data_MEM );
 
-    assign rd_data = (opcode_MEM == 7'b0110111) ? immediate_data_MEM : ( (data_mem_cs_MEM & !data_mem_wr_MEM) ? mem_data : alu_data_MEM );
+                                //LUI                   AUIPC
+    assign rd_data = (opcode_MEM == 7'b0110111 | opcode_MEM == 7'b0010111) ? immediate_data_MEM : ( (data_mem_cs_MEM & !data_mem_wr_MEM) ? mem_data : alu_data_MEM );
 
 endmodule
 
