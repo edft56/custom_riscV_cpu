@@ -473,7 +473,7 @@ module decode(  input           clk,
 
                 alu_op_DE               <= 4'd0; //add
 
-                immediate_data_DE       <= 32'd0;
+                immediate_data_DE       <= {{11{fetched_instruction_IF[31]}},fetched_instruction_IF[31],fetched_instruction_IF[19:12],fetched_instruction_IF[20],fetched_instruction_IF[30:21],1'b0};
             end
             7'b1100111: //JALR
                 begin
@@ -489,7 +489,7 @@ module decode(  input           clk,
 
                 alu_op_DE               <= 4'd0; //add
 
-                immediate_data_DE       <= {20'd0,fetched_instruction_IF[31:20]};
+                immediate_data_DE       <= {{20{fetched_instruction_IF[31]}},fetched_instruction_IF[31:20]};
             end
             7'b0110111: //LUI
             begin
