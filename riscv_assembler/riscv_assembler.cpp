@@ -85,7 +85,11 @@ std::map<std::string, uint32_t> instr_map =   {   // ALU RR
                                                 { "bgeu" ,  0b00000000000000000111000001100011 },
                                                 // U-TYPE
                                                 { "lui"  ,  0b00000000000000000000000000110111 },
-                                                { "auipc",  0b00000000000000000000000000010111 }
+                                                { "auipc",  0b00000000000000000000000000010111 },
+                                                // UJ-TYPE
+                                                { "jal"  ,  0b00000000000000000000000001101111 },
+                                                // JALR
+                                                { "jalr" ,  0b00000000000000000000000001100111 }
                                             };
 
 std::vector<std::string> R_instr = {
@@ -176,7 +180,7 @@ bool find_string_in_vector(std::vector<std::string>& vector, std::string str){
     return false;
 }
 
-uint32_t handle_R_type(std::string instruction_name ,std::string rest_of_instr){
+uint32_t handle_R_type(std::string instruction_name, std::string rest_of_instr){
     std::string elements_found[rest_of_instr.length()];
 
     char sep_list[3] = {' ', ',','\n'};
@@ -199,7 +203,7 @@ uint32_t handle_R_type(std::string instruction_name ,std::string rest_of_instr){
     }
 }
 
-uint32_t handle_load(std::string instruction_name ,std::string rest_of_instr){
+uint32_t handle_load(std::string instruction_name, std::string rest_of_instr){
     std::string elements_found[rest_of_instr.length()];
 
     char sep_list[5] = {' ', ',','(',')','\n'};
@@ -225,7 +229,7 @@ uint32_t handle_load(std::string instruction_name ,std::string rest_of_instr){
     
 }
 
-uint32_t handle_S_type(std::string instruction_name ,std::string rest_of_instr){
+uint32_t handle_S_type(std::string instruction_name, std::string rest_of_instr){
     std::string elements_found[rest_of_instr.length()];
 
     char sep_list[5] = {' ', ',','(',')','\n'};
@@ -250,7 +254,7 @@ uint32_t handle_S_type(std::string instruction_name ,std::string rest_of_instr){
     
 }
 
-uint32_t handle_alu_imm(std::string instruction_name ,std::string rest_of_instr){
+uint32_t handle_alu_imm(std::string instruction_name, std::string rest_of_instr){
     std::string elements_found[rest_of_instr.length()];
 
     char sep_list[3] = {' ', ',','\n'};
@@ -261,7 +265,7 @@ uint32_t handle_alu_imm(std::string instruction_name ,std::string rest_of_instr)
     //     std::cout<<elements_found[i]<<std::endl;
     // }
 
-    if (element_number>3) {std::cout<<"Unkown ALU Imm Instruction"<<'\n'; exit(1);}
+    if (element_number!=3) {std::cout<<"Unkown ALU Imm Instruction"<<'\n'; exit(1);}
     else{
         uint32_t rd_idx = reg_map.at(elements_found[0]);
         uint32_t rs1_idx = reg_map.at(elements_found[1]);
@@ -275,7 +279,7 @@ uint32_t handle_alu_imm(std::string instruction_name ,std::string rest_of_instr)
     
 }
 
-uint32_t handle_B_type(std::string instruction_name ,std::string rest_of_instr){
+uint32_t handle_B_type(std::string instruction_name, std::string rest_of_instr){
     std::string elements_found[rest_of_instr.length()];
 
     char sep_list[3] = {' ', ',','\n'};
@@ -308,7 +312,7 @@ uint32_t handle_B_type(std::string instruction_name ,std::string rest_of_instr){
     
 }
 
-uint32_t handle_I_type(std::string instruction_name ,std::string rest_of_instr){
+uint32_t handle_I_type(std::string instruction_name, std::string rest_of_instr){
 
     if (instruction_name=="lb" || instruction_name=="lw" || instruction_name=="lh" || instruction_name=="lbu" || instruction_name=="lhu"){
         return handle_load(instruction_name, rest_of_instr); 
@@ -318,7 +322,7 @@ uint32_t handle_I_type(std::string instruction_name ,std::string rest_of_instr){
     }
 }
 
-uint32_t handle_U_type(std::string instruction_name ,std::string rest_of_instr){
+uint32_t handle_U_type(std::string instruction_name, std::string rest_of_instr){
     std::string elements_found[rest_of_instr.length()];
 
     char sep_list[5] = {' ', ',','(',')','\n'};
@@ -336,6 +340,34 @@ uint32_t handle_U_type(std::string instruction_name ,std::string rest_of_instr){
         if (immediate_data<0 | immediate_data>=1048576) {std::cout<<"U-Type Immediate negative or >= 1048576"<<"\n"; exit(1);}
 
         uint32_t bin_instr = instr_map.at(instruction_name);
+
+        return (bin_instr | (rd_idx << 7)) | (immediate_data<<12);
+    }
+    
+}
+
+uint32_t handle_UJ_type(std::string instruction_name, std::string rest_of_instr){
+    std::string elements_found[rest_of_instr.length()];
+
+    char sep_list[5] = {' ', ',','\n'};
+
+    int element_number = string_sep_elements(rest_of_instr,sep_list,3,elements_found);
+
+    if (element_number>2) {std::cout<<"Unknown UJ type Instruction"<<'\n'; exit(1);}
+    else{
+        uint32_t rd_idx = reg_map.at(elements_found[0]);
+        int32_t immediate_data = stoi(elements_found[1]); //signed
+        if (abs(immediate_data) >= 1048576) {std::cout<<"UJ-Type Immediate greater or equal than 1048576"<<"\n"; exit(1);}
+        if ( (immediate_data % 2) != 0 ) {std::cout<<"UJ-Type Immediate not a multiple of 2"<<"\n"; exit(1);}
+
+        uint32_t bin_instr = instr_map.at(instruction_name);
+
+        uint32_t imm_field1 = immediate_data & 0x00080000;
+        uint32_t imm_field2 = immediate_data & 0x000003FF;
+        uint32_t imm_field3 = immediate_data & 0x00000400;
+        uint32_t imm_field4 = immediate_data & 0x0007F800;
+
+        immediate_data = imm_field1 | (imm_field2<<9) | (imm_field3>>2) | (imm_field4>>11);
 
         return (bin_instr | (rd_idx << 7)) | (immediate_data<<12);
     }
@@ -381,7 +413,7 @@ void assemble(std::string code_filename, std::string bin_filename, bool write_fi
                 else if ( find_string_in_vector(S_instr,instruction_name) ) binary_instruction = handle_S_type(instruction_name,line.substr(i,line.length()-instr_length));
                 else if ( find_string_in_vector(B_instr,instruction_name) ) binary_instruction = handle_B_type(instruction_name,line.substr(i,line.length()-instr_length));
                 else if ( find_string_in_vector(U_instr,instruction_name) ) binary_instruction = handle_U_type(instruction_name,line.substr(i,line.length()-instr_length));
-                //else if ( find_string_in_vector(UJ_instr,instruction_name) ) binary_instruction = handle_UJ_type(instruction_name,line.substr(i,line.length()));
+                else if ( find_string_in_vector(UJ_instr,instruction_name) ) binary_instruction = handle_UJ_type(instruction_name,line.substr(i,line.length()-instr_length));
                 else {std::cout<<"Unknown instruction"<<"\n"; exit(1);}
                 break;
             }
