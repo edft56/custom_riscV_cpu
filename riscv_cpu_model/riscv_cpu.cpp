@@ -42,6 +42,8 @@ std::string reg_map [32] =   {
                                                  "t6", 
                                             };
 
+
+
 bool     Branch::get_branch_cond(uint32_t rs1, uint32_t rs2, uint8_t branch_op){
             if( branch_op == 0) return rs1 == rs2;
             if( branch_op == 1) return rs1 != rs2;
@@ -58,7 +60,6 @@ uint32_t Branch::get_branch_addr(uint32_t PC, uint32_t immediate_data){
 }
 
 
-
 uint32_t ALU::get_alu_result(uint32_t rs1, uint32_t rs2, uint8_t alu_op, bool func7_bit5){
     if( alu_op == 0) return (func7_bit5) ? rs1 - rs2 : rs1 + rs2;
     if( alu_op == 1) return rs1 << rs2;
@@ -71,7 +72,6 @@ uint32_t ALU::get_alu_result(uint32_t rs1, uint32_t rs2, uint8_t alu_op, bool fu
     std::cout<<"Unknown ALU op"<<std::endl;
     exit(1);
 }
-
 
 
         Ram::Ram(uint32_t ram_size_in_bytes){
@@ -205,6 +205,25 @@ void     RiscvCore::handle_store_instr(uint32_t rs1_idx, uint32_t immediate_data
     }
 }
 
+void     RiscvCore::handle_jal(uint32_t rd_idx, uint32_t immediate_data){
+    reg_file.write(rd_idx, PC);
+    PC = PC + immediate_data;
+}
+
+void     RiscvCore::handle_jalr(uint32_t rd_idx, uint32_t rs1_idx, uint32_t immediate_data){
+    uint32_t rs1_data = reg_file.read(rs1_idx);
+    reg_file.write(rd_idx, PC);
+    PC = rs1_data + immediate_data;
+}
+
+void     RiscvCore::handle_lui(uint32_t rd_idx, uint32_t immediate_data){
+    reg_file.write(rd_idx, immediate_data);
+}
+
+void     RiscvCore::handle_auipc(uint32_t rd_idx, uint32_t immediate_data){
+    reg_file.write(rd_idx, immediate_data + PC);
+}
+
 uint32_t RiscvCore::instruction_fetch(){
     uint32_t instruction = instruction_memory.load<uint32_t>(PC);
     PC = PC + 4;
@@ -257,6 +276,36 @@ void     RiscvCore::instruction_decode_and_execute(uint32_t instruction){
         case 0b00110011: //ALU RR
         {
             handle_alu_instr(rs1_idx,rs2_idx,rd_idx,funct3,funct7_bit5);
+            break;
+        }
+        case 0b1101111: //JAL
+        {
+            uint32_t sign_extend = ( ((instruction & 0x80000000) != 0) ? 0xFFF00000 : 0x00000000);
+            uint32_t imm_field1 = instruction & 0x80000000;
+            uint32_t imm_field2 = instruction & 0x7FE00000;
+            uint32_t imm_field3 = instruction & 0x00100000;
+            uint32_t imm_field4 = instruction & 0x000FF000;
+            uint32_t immediate_data = (imm_field1 | (imm_field2>>9) | (imm_field3<<2) | (imm_field4<<11)) >> 12;
+            handle_jal(rd_idx, immediate_data);
+            break;
+        }
+        case 0b1100111: //JALR
+        {
+            uint32_t sign_extend = ( ((instruction & 0x80000000) != 0) ? 0xFFFFF800 : 0x00000000);
+            immediate_data = sign_extend | ((instruction & 0x7FF00000)>>20);
+            handle_jalr(rd_idx, rs1_idx, immediate_data);
+            break;
+        }
+        case 0b0110111: //LUI
+        {
+            immediate_data = instruction & 0xFFFFF000;
+            handle_lui(rd_idx,immediate_data);
+            break;
+        }
+        case 0b0010111: //AUIPC
+        {
+            immediate_data = instruction & 0xFFFFF000;
+            handle_auipc(rd_idx,immediate_data);
             break;
         }
         default:

@@ -67,6 +67,14 @@ class RiscvCore{
 
         void handle_store_instr(uint32_t rs1_idx, uint32_t immediate_data, uint8_t rs2_idx, uint8_t funct3);
 
+        void handle_jal(uint32_t rd_idx, uint32_t immediate_data);
+
+        void handle_jalr(uint32_t rd_idx, uint32_t rs1_idx, uint32_t immediate_data);
+
+        void handle_lui(uint32_t rd_idx, uint32_t immediate_data);
+
+        void handle_auipc(uint32_t rd_idx, uint32_t immediate_data);
+
         uint32_t instruction_fetch();
 
         void instruction_decode_and_execute(uint32_t instruction);
