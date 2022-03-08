@@ -1,6 +1,8 @@
 `timescale 1ns/1ns
 
 `define WL 31 //word length
+`define IMEM_SIZE 8*1024*1024
+`define DMEM_SIZE 8*1024*1024
 
 module riscv_custom( input clk, input reset);
     wire [`WL:0]   PC_IF;
@@ -248,7 +250,7 @@ module instructionFetch(input clk_i,
 
     memory #(
             .MEM_WORD_SIZE( 32 ),
-            .MEM_SIZE_BYTES( 8*1024*1024 ),
+            .MEM_SIZE_BYTES( `IMEM_SIZE ),
             .ADRESS_WIDTH( 23 ),
             .initialize( 1 ),
             .init_file("ass_bin.dat")
@@ -799,7 +801,7 @@ module mmu( input clk,
         for(i=0; i<4; i=i+1) begin
             memory #(
                 .MEM_WORD_SIZE( 8 ),
-                .MEM_SIZE_BYTES( 2*1024*1024 ),
+                .MEM_SIZE_BYTES( `DMEM_SIZE/4 ),
                 .ADRESS_WIDTH( 21 )
                 )
             bram0
