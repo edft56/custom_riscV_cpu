@@ -29,11 +29,11 @@ int main(int argc, char** argv, char** env) {
     for(int i=0; i<test_times; i++){
         //top->CLK = 0;
 
-        uint32_t x_sim = uint32_t( rand() % uint64_t(pow(2,32)) );
-        uint32_t y_sim = uint32_t( rand() % uint64_t(pow(2,32)) );
+        uint64_t x_sim = uint32_t( rand() % uint64_t(pow(2,32)) );
+        uint64_t y_sim = uint32_t( rand() % uint64_t(pow(2,32)) );
         
-        top-> X = x_sim;
-        top-> Y = y_sim;
+        top-> X = (uint32_t)x_sim;
+        top-> Y = (uint32_t)y_sim;
 
         top->eval();            // Evaluate model
         if (trace) tfp->dump(time);
@@ -41,7 +41,7 @@ int main(int argc, char** argv, char** env) {
         uint64_t result;
         result = x_sim * y_sim;
 
-        std::cout<<x_sim<<" "<<y_sim<<" "<<std::bitset<64>(result)<<"  "<<std::bitset<64>(uint64_t(top->Result))<<"\n";
+        //if(i<10)std::cout<<x_sim<<" "<<y_sim<<" "<<result<<" "<<std::bitset<64>(result)<<"  "<<std::bitset<64>(uint64_t(top->Result))<<"\n";
 
         if( result != uint64_t(top->Result) ) {correct = false; break;}
 
