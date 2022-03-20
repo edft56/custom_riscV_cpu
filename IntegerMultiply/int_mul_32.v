@@ -1,7 +1,7 @@
 `timescale 1ns/1ns
 
-//`include "../CLA_adder_32/cla_adder_32.v"
-`include "../cla_adder_32.v"
+`include "../CLA_adder_32/cla_adder_32.v"
+
 
 
 module mul32x32(input  [OPERAND_SIZE-1   : 0]      X,

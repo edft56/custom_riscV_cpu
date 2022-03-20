@@ -1,6 +1,6 @@
 `timescale 1ns/1ns
 
-`include "../cla_adder_32.v"
+`include "../CLA_adder_32/cla_adder_32.v"
 
 
 module int_div_32(  input                        clk_i,
@@ -21,7 +21,7 @@ module int_div_32(  input                        clk_i,
     reg [             4 : 0] cntr_q; 
     reg                      sign_result;
 
-    wire [OPERAND_SIZE : 0] sub_result;
+    wire [OPERAND_SIZE-1 : 0] sub_result;
 
 
     initial state_q = 0;
@@ -39,9 +39,9 @@ module int_div_32(  input                        clk_i,
 
     cla_adder_32 cla32( .x( {acc_q[OPERAND_SIZE-2:0],dividend_q[OPERAND_SIZE-1]} ), 
                         .y( divisor_q ), 
-                        .sub( 1'b1 ), 
+                        .sub( (signed_i) ? ~divisor_q[OPERAND_SIZE-1] : 1'b1 ), 
                         .sum( sub_result[OPERAND_SIZE-1 : 0] ), 
-                        .c_out( sub_result[OPERAND_SIZE] )
+                        .c_out( )
                         );
 
     //assign sub_result  = {acc_q[OPERAND_SIZE-2:0],dividend_q[OPERAND_SIZE-1]} - divisor_q;
@@ -58,8 +58,8 @@ module int_div_32(  input                        clk_i,
             end
             2'b01: begin
                 sign_result   <= sign_result;
-                acc_q         <= (sub_result[OPERAND_SIZE] == 0) ?      sub_result[OPERAND_SIZE-1 : 0] : { acc_q[OPERAND_SIZE-2 : 0], dividend_q[OPERAND_SIZE-1] };
-                dividend_q    <= (sub_result[OPERAND_SIZE] == 0) ? {dividend_q[OPERAND_SIZE-2:0],1'b1} :                       {dividend_q[OPERAND_SIZE-2:0],1'b0};
+                acc_q         <= (sub_result[OPERAND_SIZE-1] == 0) ?      sub_result[OPERAND_SIZE-1 : 0] : { acc_q[OPERAND_SIZE-2 : 0], dividend_q[OPERAND_SIZE-1] };
+                dividend_q    <= (sub_result[OPERAND_SIZE-1] == 0) ? {dividend_q[OPERAND_SIZE-2:0],1'b1} :                       {dividend_q[OPERAND_SIZE-2:0],1'b0};
                 divisor_q     <= divisor_q;
                 cntr_q        <= cntr_q + 1;
                 state_q       <= (cntr_q == OPERAND_SIZE-1) ? 2'b10 : state_q;

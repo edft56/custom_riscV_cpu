@@ -24,23 +24,23 @@ int main(int argc, char** argv, char** env) {
 
     //top->CLK = 0;
     bool correct = true;
-    uint32_t test_times = 20000000;
+    uint64_t test_times = 100000000;
 
-    for(int i=0; i<test_times; i++){
+    for(uint64_t i=0; i<test_times; i++){
         //top->CLK = 0;
 
-        int32_t x_sim = int32_t( rand() % uint64_t(pow(2,32)) );
-        int32_t y_sim = int32_t( rand() % uint64_t(pow(2,32)) );
-        bool sub_sim = bool(i % (test_times/2));
+        int64_t x_sim = (int64_t)( (int64_t)rand() % (uint64_t)pow(2,32) );
+        int64_t y_sim = (int64_t)( (int64_t)rand() % (uint64_t)pow(2,32) );
+        bool sub_sim = bool(test_times%2==0);
         
-        top-> x = x_sim;
-        top-> y = y_sim;
+        top-> x = (uint32_t)x_sim;
+        top-> y = (uint32_t)y_sim;
         top-> sub = sub_sim;
 
         top->eval();            // Evaluate model
         if (trace) tfp->dump(time);
         
-        int32_t result;
+        int64_t result;
         if (sub_sim){
             result = x_sim - y_sim;
         }
@@ -48,12 +48,21 @@ int main(int argc, char** argv, char** env) {
             result = x_sim + y_sim;
         }
 
-        //if(i<100) std::cout<<x_sim<<" "<<y_sim<<" "<<result<<"  "<<int32_t(top->sum)<<"\n";
+        //std::cout<<(((uint32_t)(top->sum) & 0x80000000) != 0)<<"\n";
+        
+        bool sign_extend = x_sim<0 | y_sim<0 | (sub_sim & y_sim>=0);
 
-        if( result != int32_t(top->sum) ) {correct = false; break;}
+        uint64_t verilog_result = (uint64_t)(top->sum);
+        if(sign_extend) verilog_result = (uint64_t)( (((uint32_t)(top->sum) & 0x80000000) != 0) ? 0xFFFFFFFF00000000 : 0x0000000000000000) | verilog_result;
+
+        //if(i<100) std::cout<<std::bitset<32>(x_sim)<<" "<<std::bitset<32>(y_sim)<<" "<<" "<<result<<" "<<verilog_result<<" "<<std::bitset<64>(result)<<"  "<<std::bitset<64>(verilog_result)<<"\n";
+
+        if( result != verilog_result ) {correct = false; break;}
 
         if (trace) time++;
     }
+    //00111001000100000010000110100001
+    //
 
     if(!correct) std::cout<<"Not Correct\n";
     else std::cout<<"Correct\n";
