@@ -42,18 +42,20 @@ void test(){
         top->eval(); 
         if (trace) tfp->dump(time);
 
-        if(i%33==0){
+        if(i%36==0){
             x_sim = uint32_t( rand() % uint64_t(pow(2,32)) );
             y_sim = uint32_t( rand() % uint64_t(pow(2,32)) );
             top-> dividend_i = (uint32_t)x_sim;
             top-> divisor_i = (uint32_t)y_sim;
-            top-> load_i = (i%33==0) ? 1 : 0;
+            top-> signed_i = false;
+            top-> load_i = (i%36==0) ? 1 : 0;
         
             if( (uint32_t)top->quotient_o != quotient || (uint32_t)top->remainder_o!= remainder ) {correct = false; break;}
             quotient = x_sim/y_sim;
             remainder = x_sim%y_sim;
-            //std::cout<<x_sim<<" "<<y_sim<<" "<<quotient<<" "<<remainder<<"  "<<(uint32_t)top->quotient_o<<"  "<<(uint32_t)top->remainder_o<<"\n";
+            //
         }
+        std::cout<<x_sim<<" "<<y_sim<<" "<<quotient<<" "<<remainder<<"  "<<(uint32_t)top->quotient_o<<"  "<<(uint32_t)top->remainder_o<<"\n";
 
         
 
