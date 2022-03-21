@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <bitset>
+#include <random>
 
 constexpr bool trace = false;
 
@@ -65,6 +66,10 @@ void test_pipelined(){
 
     vluint64_t time = 0;
 
+    std::random_device rseed;
+    std::mt19937 rng(rseed());
+    std::uniform_int_distribution<int> dist(-pow(2,30), pow(2,30)-1);
+
     Verilated::traceEverOn(true);
     VerilatedVcdC* tfp = new VerilatedVcdC;
     if (trace){
@@ -75,16 +80,20 @@ void test_pipelined(){
     bool correct = true;
     uint32_t test_times = 100000;
 
-    uint64_t result[5] = {0};
+    int64_t result[5] = {0};
+
+    int32_t x_sim;
+    int32_t y_sim;
 
     for(int i=0; i<test_times; i++){
         top->clk = 0;
 
-        uint64_t x_sim = uint32_t( rand() % uint64_t(pow(2,32)) );
-        uint64_t y_sim = uint32_t( rand() % uint64_t(pow(2,32)) );
+        x_sim = dist(rng);
+        y_sim = dist(rng);
         
-        top-> X = (uint32_t)x_sim;
-        top-> Y = (uint32_t)y_sim;
+        top-> X = (int32_t)x_sim;
+        top-> Y = (int32_t)y_sim;
+        
 
         top->eval();            // Evaluate model
         if (trace) tfp->dump(time);
@@ -93,15 +102,14 @@ void test_pipelined(){
         top->eval(); 
         if (trace) tfp->dump(time);
         
-        
         for(int j=0; j<4; j++){
             result[4-j] = result[4-j-1];
         }
-        result[0] = x_sim * y_sim;
+        result[0] = (int64_t)x_sim * (int64_t)y_sim;
 
-        if(i<10) std::cout<<x_sim<<" "<<y_sim<<" "<<result[4]<<" "<<std::bitset<64>(result[4])<<"  "<<std::bitset<64>(uint64_t(top->Result))<<"\n";
+        if(i<10) std::cout<<x_sim<<" "<<y_sim<<" "<<result[4]<<" "<<std::bitset<64>(result[4])<<"  "<<std::bitset<64>(int64_t(top->Result))<<"\n";
 
-        if( i>3 && result[4] != uint64_t(top->Result) ) {correct = false; break;}
+        if( i>3 && result[4] != int64_t(top->Result) ) {correct = false; break;}
 
         if (trace) time++;
     }
