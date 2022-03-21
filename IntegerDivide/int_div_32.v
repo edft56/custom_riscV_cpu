@@ -20,6 +20,7 @@ module int_div_32(  input                        clk_i,
     reg [             1 : 0] state_q;
     reg [             4 : 0] cntr_q; 
     reg                      sign_result;
+    reg                      sign_dividend;
 
     wire [OPERAND_SIZE-1 : 0] sub_result;
 
@@ -49,6 +50,7 @@ module int_div_32(  input                        clk_i,
     always @(negedge clk_i) begin
         case(state_q)
             2'b00: begin
+                sign_dividend <= dividend_i[OPERAND_SIZE-1];
                 sign_result   <= (dividend_i[OPERAND_SIZE-1] ^ divisor_i[OPERAND_SIZE-1]);
                 acc_q         <= 0;
                 dividend_q    <= (load_i) ? ( (signed_i & (dividend_i[OPERAND_SIZE-1] == 1'b1)) ? ~dividend_i + 1 : dividend_i ) : dividend_q;
@@ -57,6 +59,7 @@ module int_div_32(  input                        clk_i,
                 state_q       <= (load_i) ? 2'b01      : state_q;
             end
             2'b01: begin
+                sign_dividend <= sign_dividend;
                 sign_result   <= sign_result;
                 acc_q         <= (sub_result[OPERAND_SIZE-1] == 0) ?      sub_result[OPERAND_SIZE-1 : 0] : { acc_q[OPERAND_SIZE-2 : 0], dividend_q[OPERAND_SIZE-1] };
                 dividend_q    <= (sub_result[OPERAND_SIZE-1] == 0) ? {dividend_q[OPERAND_SIZE-2:0],1'b1} :                       {dividend_q[OPERAND_SIZE-2:0],1'b0};
@@ -66,7 +69,7 @@ module int_div_32(  input                        clk_i,
             end
             2'b10: begin
                 sign_result   <= sign_result;
-                acc_q         <= (signed_i & sign_result) ? ~acc_q+1      : acc_q;
+                acc_q         <= (signed_i & sign_dividend) ? ~acc_q+1      : acc_q;
                 dividend_q    <= (signed_i & sign_result) ? ~dividend_q+1 : dividend_q;
                 divisor_q     <= divisor_q;
                 cntr_q        <= cntr_q;

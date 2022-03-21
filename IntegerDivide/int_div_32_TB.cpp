@@ -26,10 +26,10 @@ void test(){
     bool correct = true;
     uint64_t test_times = (uint64_t)(1000000)*34;
 
-    uint64_t x_sim;
-    uint64_t y_sim;
-    uint32_t quotient=0;
-    uint32_t remainder=0;
+    int32_t x_sim;
+    int32_t y_sim;
+    int32_t quotient=0;
+    int32_t remainder=0;
 
     std::random_device rseed;
     std::mt19937 rng(rseed());
@@ -50,21 +50,22 @@ void test(){
         if(i%34==0){
             //x_sim = int32_t( rand() % uint64_t(pow(2,32)) );
             //y_sim = int32_t( rand() % uint64_t(pow(2,32)) );
-            x_sim = dist(rng)-1221412;
-            y_sim = dist(rng);
+            x_sim = dist(rng);//-100000000;
+            y_sim = dist(rng);//-100000000;
             top-> dividend_i = (int32_t)x_sim;
             top-> divisor_i = (int32_t)y_sim;
-            top-> signed_i = true;
+            top-> signed_i = false;
             top-> load_i = (i%34==0) ? 1 : 0;
         
             if( (int32_t)top->quotient_o != quotient || (int32_t)top->remainder_o!= remainder ) {correct = false; break;}
+            if(i<100*34)std::cout<<x_sim<<" "<<y_sim<<" "<<quotient<<" "<<remainder<<"  "<<(int32_t)top->quotient_o<<"  "<<(int32_t)top->remainder_o<<"\n";
             quotient = x_sim/y_sim;
             remainder = x_sim%y_sim;
-            if(i<100*34)std::cout<<x_sim<<" "<<y_sim<<" "<<quotient<<" "<<remainder<<"  "<<(int32_t)top->quotient_o<<"  "<<(int32_t)top->remainder_o<<"\n";
         }
 
         if (trace) time++;
     }
+    std::cout<<x_sim<<" "<<y_sim<<" "<<quotient<<" "<<remainder<<"  "<<(int32_t)top->quotient_o<<"  "<<(int32_t)top->remainder_o<<"\n";
 
 
     if(!correct) std::cout<<"Not Correct\n";
