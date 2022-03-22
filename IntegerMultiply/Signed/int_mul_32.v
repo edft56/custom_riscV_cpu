@@ -1,73 +1,33 @@
 `timescale 1ns/1ns
 
-`include "../CLA_adder_32/cla_adder_32.v"
+`include "../../CLA_adder_32/cla_adder_32.v"
 
 
 
-module mul32x32(input  [OPERAND_SIZE-1   : 0]      X,
-                input  [OPERAND_SIZE-1   : 0]      Y,
-                output [2*OPERAND_SIZE-1 : 0] Result
-                );
-    parameter OPERAND_SIZE = 32;
-
-    wire [OPERAND_SIZE-3 : 0] stage_sum       [OPERAND_SIZE-2 : 0];
-    wire [OPERAND_SIZE-2 : 0] stage_cout      [OPERAND_SIZE-2 : 0];
-    wire [OPERAND_SIZE-1 : 0] partial_product [OPERAND_SIZE-1 : 0];
-
-    assign Result[0] = partial_product[0][0];
-
-    genvar i;
-    generate
-        for(i=0; i<OPERAND_SIZE; i=i+1) begin
-            assign partial_product[i] = X & {32{Y[i]}};
-        end
-    endgenerate
-
-
-    First_Stage S1( .X( partial_product[0][OPERAND_SIZE-1 : 1] ), 
-                    .Y( partial_product[1][OPERAND_SIZE-2 : 0] ),
-                    .Sum( {stage_sum[0],Result[1]} ),
-                    .Cout( stage_cout[0] )
-                    );
-
-    generate
-        for(i=0; i<OPERAND_SIZE-2; i=i+1) begin
-            Second_Stage S2(.X( partial_product[2+i][OPERAND_SIZE-2 : 0] ), 
-                            .Y( {partial_product[1+i][OPERAND_SIZE-1],stage_sum[i]} ),
-                            .Cin( stage_cout[i] ),
-                            .Sum( {stage_sum[1+i],Result[i+2]} ),
-                            .Cout( stage_cout[1+i] )
-                           );
-        end
-    endgenerate
-
-    Third_Stage S3( .X( {1'b0, stage_cout[OPERAND_SIZE-2]} ),
-                    .Y( {1'b0, partial_product[OPERAND_SIZE-1][OPERAND_SIZE-1], stage_sum[OPERAND_SIZE-2]} ),
-                    .Sum( Result[2*OPERAND_SIZE-1 : OPERAND_SIZE] ),
-                    .Cout()
-                    );
-
-endmodule
-
-module mul32x32_pipelined(  input                                clk,
-                            input      [OPERAND_SIZE-1   : 0]      X,
-                            input      [OPERAND_SIZE-1   : 0]      Y,
+module mul32x32_pipelined(  input                                      clk,
+                            input                             signed_mul_i,
+                            input      [OPERAND_SIZE-1   : 0]            X,
+                            input      [OPERAND_SIZE-1   : 0]            Y,
+                        
                             output reg [2*OPERAND_SIZE-1 : 0] Result
                             );
     parameter OPERAND_SIZE = 32;
                                               //Pipe Stages
-    wire [OPERAND_SIZE-3   : 0] stage_sum       [2:0];
-    wire [OPERAND_SIZE-2   : 0] stage_cout      [2:0];
+    wire [OPERAND_SIZE-2   : 0] stage_sum       [2:0];
+    wire [OPERAND_SIZE-1   : 0] stage_cout      [2:0];
     wire [OPERAND_SIZE-1   : 0] partial_product [2:0][OPERAND_SIZE-1 : 0];
     wire [2*OPERAND_SIZE-1 : 0] stage_result    [2:0];
+    wire                        signed_mul      [2:0];
 
 
     first_pipe_stage #(.CUR_SECOND_STAGES(8)
                         )
-                     P1(.clk_i( clk ),
+                     P1(.signed_mul_i( signed_mul_i ),
+                        .clk_i( clk ),
                         .X_i( X ),
                         .Y_i( Y ),
                         
+                        .signed_mul_o( signed_mul[0] ),
                         .stage_partial_product_o(partial_product[0]),
                         .stage_sum_o(stage_sum[0]),
                         .stage_cout_o(stage_cout[0]),
@@ -77,12 +37,14 @@ module mul32x32_pipelined(  input                                clk,
     second_pipe_stage #(.CUR_SECOND_STAGES(9),
                         .RESULT_INDEX(10)
                         )
-                      P2(.clk_i( clk ),
+                      P2(.signed_mul_i( signed_mul[0] ),
+                         .clk_i( clk ),
                          .stage_partial_product_i(partial_product[0]),
                          .stage_sum_i(stage_sum[0]),
                          .stage_cout_i(stage_cout[0]),
                          .stage_result_i(stage_result[0]),
-
+                         
+                         .signed_mul_o( signed_mul[1] ),
                          .stage_partial_product_o(partial_product[1]),
                          .stage_sum_o(stage_sum[1]),
                          .stage_cout_o(stage_cout[1]),
@@ -92,12 +54,14 @@ module mul32x32_pipelined(  input                                clk,
     second_pipe_stage #(.CUR_SECOND_STAGES(9),
                         .RESULT_INDEX(19)
                         )
-                      P3(.clk_i( clk ),
+                      P3(.signed_mul_i( signed_mul[1] ),
+                         .clk_i( clk ),
                          .stage_partial_product_i(partial_product[1]),
                          .stage_sum_i(stage_sum[1]),
                          .stage_cout_i(stage_cout[1]),
                          .stage_result_i(stage_result[1]),
 
+                         .signed_mul_o( signed_mul[2] ),
                          .stage_partial_product_o(partial_product[2]),
                          .stage_sum_o(stage_sum[2]),
                          .stage_cout_o(stage_cout[2]),
@@ -107,7 +71,8 @@ module mul32x32_pipelined(  input                                clk,
     third_pipe_stage #(.CUR_SECOND_STAGES(4),
                         .RESULT_INDEX(28)
                         )
-                     P4(.clk_i( clk ),
+                     P4(.signed_mul_i( signed_mul[2] ),
+                        .clk_i( clk ),
                         .stage_partial_product_i(partial_product[2]),
                         .stage_sum_i(stage_sum[2]),
                         .stage_cout_i(stage_cout[2]),
@@ -120,21 +85,23 @@ module mul32x32_pipelined(  input                                clk,
 endmodule
 
 module first_pipe_stage(input  clk_i,
+                        input  signed_mul_i,
                         input  [OPERAND_SIZE-1   : 0] X_i,
                         input  [OPERAND_SIZE-1   : 0] Y_i,
                         
+                        output reg                       signed_mul_o,
                         output reg[OPERAND_SIZE-1   : 0] stage_partial_product_o [OPERAND_SIZE-1 : 0], //pray compiler optimizes away the extra registers
-                        output reg[OPERAND_SIZE-3   : 0] stage_sum_o,
-                        output reg[OPERAND_SIZE-2   : 0] stage_cout_o,
+                        output reg[OPERAND_SIZE-2   : 0] stage_sum_o,
+                        output reg[OPERAND_SIZE-1   : 0] stage_cout_o,
                         output reg[2*OPERAND_SIZE-1 : 0] stage_result_o //pray compiler optimizes away the extra registers
                         );
     parameter OPERAND_SIZE = 32;
     parameter CUR_SECOND_STAGES = 8;
 
-    wire [OPERAND_SIZE-3      : 0] stage_sum       [CUR_SECOND_STAGES : 0];
-    wire [OPERAND_SIZE-2      : 0] stage_cout      [CUR_SECOND_STAGES : 0];
-    wire [OPERAND_SIZE-1      : 0] partial_product [OPERAND_SIZE-1 : 0];
-    wire [2+CUR_SECOND_STAGES : 0] stage_result;
+    wire [OPERAND_SIZE-2        : 0] stage_sum       [CUR_SECOND_STAGES : 0];
+    wire [OPERAND_SIZE-1        : 0] stage_cout      [CUR_SECOND_STAGES : 0];
+    wire [OPERAND_SIZE-1        : 0] partial_product [OPERAND_SIZE-1 : 0];
+    wire [2+CUR_SECOND_STAGES-1 : 0] stage_result;
 
     assign stage_result[0] = partial_product[0][0];
 
@@ -146,16 +113,18 @@ module first_pipe_stage(input  clk_i,
     endgenerate
 
 
-    First_Stage S1( .X( partial_product[0][OPERAND_SIZE-1 : 1] ), 
-                    .Y( partial_product[1][OPERAND_SIZE-2 : 0] ),
+    First_Stage S1( .signed_mul( signed_mul_i ),
+                    .X( partial_product[0][OPERAND_SIZE-1 : 1] ), 
+                    .Y( partial_product[1][OPERAND_SIZE-1 : 0] ),
                     .Sum( {stage_sum[0],stage_result[1]} ),
                     .Cout( stage_cout[0] )
                     );
 
     generate
         for(i=0; i<CUR_SECOND_STAGES; i=i+1) begin
-            Second_Stage S2(.X( partial_product[2+i][OPERAND_SIZE-2 : 0] ), 
-                            .Y( {partial_product[1+i][OPERAND_SIZE-1],stage_sum[i]} ),
+            Second_Stage S2(.signed_mul( signed_mul_i ),
+                            .X( partial_product[2+i] ), 
+                            .Y( stage_sum[i] ),
                             .Cin( stage_cout[i] ),
                             .Sum( {stage_sum[1+i],stage_result[i+2]} ),
                             .Cout( stage_cout[1+i] )
@@ -164,50 +133,51 @@ module first_pipe_stage(input  clk_i,
     endgenerate
 
     always @(negedge clk_i) begin
-        stage_result_o[2+CUR_SECOND_STAGES : 0] <= stage_result;
+        stage_result_o[2+CUR_SECOND_STAGES-1 : 0] <= stage_result;
 
         stage_sum_o             <= stage_sum[CUR_SECOND_STAGES];
         stage_cout_o            <= stage_cout[CUR_SECOND_STAGES];
         stage_partial_product_o <= partial_product;
+        signed_mul_o            <= signed_mul_i;
     end
     
     
 endmodule
 
 module second_pipe_stage(   input clk_i,
+                            input signed_mul_i,
                             input [OPERAND_SIZE-1    : 0] stage_partial_product_i [OPERAND_SIZE-1 : 0],
-                            input [OPERAND_SIZE-3    : 0] stage_sum_i,
-                            input [OPERAND_SIZE-2    : 0] stage_cout_i,
+                            input [OPERAND_SIZE-2    : 0] stage_sum_i,
+                            input [OPERAND_SIZE-1    : 0] stage_cout_i,
                             input [2*OPERAND_SIZE-1  : 0] stage_result_i,
 
+                            output reg                        signed_mul_o,
                             output reg [OPERAND_SIZE-1   : 0] stage_partial_product_o [OPERAND_SIZE-1 : 0],
-                            output reg [OPERAND_SIZE-3   : 0] stage_sum_o,
-                            output reg [OPERAND_SIZE-2   : 0] stage_cout_o,
+                            output reg [OPERAND_SIZE-2   : 0] stage_sum_o,
+                            output reg [OPERAND_SIZE-1   : 0] stage_cout_o,
                             output reg [2*OPERAND_SIZE-1 : 0] stage_result_o
                         );
     parameter OPERAND_SIZE = 32;
     parameter RESULT_INDEX = 8; //how many bits of the result have already been computed
     parameter CUR_SECOND_STAGES = 8;
 
-    wire [OPERAND_SIZE-3      : 0] stage_sum    [CUR_SECOND_STAGES-1 : 0];
-    wire [OPERAND_SIZE-2      : 0] stage_cout   [CUR_SECOND_STAGES-1 : 0];
+    wire [OPERAND_SIZE-2      : 0] stage_sum    [CUR_SECOND_STAGES : 0];
+    wire [OPERAND_SIZE-1      : 0] stage_cout   [CUR_SECOND_STAGES : 0];
     wire [CUR_SECOND_STAGES-1 : 0] stage_result;
 
-    Second_Stage S2(.X( stage_partial_product_i[RESULT_INDEX][OPERAND_SIZE-2 : 0] ), 
-                    .Y( {stage_partial_product_i[RESULT_INDEX-1][OPERAND_SIZE-1], stage_sum_i} ),
-                    .Cin( stage_cout_i ),
-                    .Sum( {stage_sum[0], stage_result[0]} ),
-                    .Cout( stage_cout[0] )
-                    );
+    assign stage_cout[0] = stage_cout_i;
+    assign stage_sum[0]  = stage_sum_i;
+
 
     genvar i;
     generate
-        for(i=0; i<CUR_SECOND_STAGES-1; i=i+1) begin
-            Second_Stage S2(.X( stage_partial_product_i[RESULT_INDEX+1 + i][OPERAND_SIZE-2 : 0] ), 
-                            .Y( {stage_partial_product_i[RESULT_INDEX + i][OPERAND_SIZE-1], stage_sum[i]} ),
+        for(i=0; i<CUR_SECOND_STAGES; i=i+1) begin
+            Second_Stage S2(.signed_mul( signed_mul_i ),
+                            .X( stage_partial_product_i[RESULT_INDEX + i] ), 
+                            .Y( stage_sum[i] ),
                             .Cin( stage_cout[i] ),
-                            .Sum( {stage_sum[1+i],stage_result[1 + i]} ),
-                            .Cout( stage_cout[1+i] )
+                            .Sum( {stage_sum[i+1],stage_result[i]} ),
+                            .Cout( stage_cout[i+1] )
                            );
         end
     endgenerate
@@ -216,17 +186,19 @@ module second_pipe_stage(   input clk_i,
         stage_result_o[RESULT_INDEX-1                     :            0] <= stage_result_i[RESULT_INDEX-1 : 0];
         stage_result_o[RESULT_INDEX + CUR_SECOND_STAGES-1 : RESULT_INDEX] <= stage_result;
 
-        stage_sum_o             <= stage_sum[CUR_SECOND_STAGES-1];
-        stage_cout_o            <= stage_cout[CUR_SECOND_STAGES-1];
+        stage_sum_o             <= stage_sum[CUR_SECOND_STAGES];
+        stage_cout_o            <= stage_cout[CUR_SECOND_STAGES];
         stage_partial_product_o <= stage_partial_product_i;
+        signed_mul_o            <= signed_mul_i;
     end
 endmodule
 
 
 module third_pipe_stage(    input clk_i,
+                            input signed_mul_i,
                             input [OPERAND_SIZE-1    : 0] stage_partial_product_i [OPERAND_SIZE-1 : 0],
-                            input [OPERAND_SIZE-3    : 0] stage_sum_i,
-                            input [OPERAND_SIZE-2    : 0] stage_cout_i,
+                            input [OPERAND_SIZE-2    : 0] stage_sum_i,
+                            input [OPERAND_SIZE-1    : 0] stage_cout_i,
                             input [2*OPERAND_SIZE-1  : 0] stage_result_i,
 
                             output reg [2*OPERAND_SIZE-1 : 0] stage_result_o
@@ -235,32 +207,43 @@ module third_pipe_stage(    input clk_i,
     parameter RESULT_INDEX = 8; //how many bits of the result have already been computed
     parameter CUR_SECOND_STAGES = 8;
 
-    wire [OPERAND_SIZE-3           : 0] stage_sum    [CUR_SECOND_STAGES-1 : 0];
-    wire [OPERAND_SIZE-2           : 0] stage_cout   [CUR_SECOND_STAGES-1 : 0];
+    wire [OPERAND_SIZE-2           : 0] stage_sum    [CUR_SECOND_STAGES : 0];
+    wire [OPERAND_SIZE-1           : 0] stage_cout   [CUR_SECOND_STAGES : 0];
     wire [CUR_SECOND_STAGES-1 + 32 : 0] stage_result;
 
-    Second_Stage S2(.X( stage_partial_product_i[RESULT_INDEX][OPERAND_SIZE-2 : 0] ), 
-                    .Y( {stage_partial_product_i[RESULT_INDEX-1][OPERAND_SIZE-1], stage_sum_i} ),
-                    .Cin( stage_cout_i ),
-                    .Sum( {stage_sum[0], stage_result[0]} ),
-                    .Cout( stage_cout[0] )
-                    );
+    assign stage_cout[0] = stage_cout_i;
+    assign stage_sum[0]  = stage_sum_i;
 
     genvar i;
     generate
         for(i=0; i<CUR_SECOND_STAGES-1; i=i+1) begin
-            Second_Stage S2(.X( stage_partial_product_i[RESULT_INDEX+1 + i][OPERAND_SIZE-2 : 0] ), 
-                            .Y( {stage_partial_product_i[RESULT_INDEX + i][OPERAND_SIZE-1], stage_sum[i]} ),
+            Second_Stage S2(.signed_mul( signed_mul_i ),
+                            .X( stage_partial_product_i[RESULT_INDEX + i] ), 
+                            .Y( stage_sum[i] ),
                             .Cin( stage_cout[i] ),
-                            .Sum( {stage_sum[1+i],stage_result[1 + i]} ),
-                            .Cout( stage_cout[1+i] )
+                            .Sum( {stage_sum[i+1],stage_result[i]} ),
+                            .Cout( stage_cout[i+1] )
                            );
         end
     endgenerate
+    
+
+    Second_Stage S2(.signed_mul( signed_mul_i ),
+                    .X( (signed_mul_i) ? 
+                        stage_partial_product_i[RESULT_INDEX + CUR_SECOND_STAGES-1]:
+                        //{stage_partial_product_i[RESULT_INDEX + CUR_SECOND_STAGES-1][OPERAND_SIZE-1], ~stage_partial_product_i[RESULT_INDEX + CUR_SECOND_STAGES-1][OPERAND_SIZE-2:0]} : 
+                        stage_partial_product_i[RESULT_INDEX + CUR_SECOND_STAGES-1]
+                      ), 
+                    .Y( stage_sum[CUR_SECOND_STAGES-1] ),
+                    .Cin( stage_cout[CUR_SECOND_STAGES-1] ),
+                    .Sum( {stage_sum[CUR_SECOND_STAGES],stage_result[CUR_SECOND_STAGES-1]} ),
+                    .Cout( stage_cout[CUR_SECOND_STAGES] )
+                    );
 
 
-    Third_Stage S3( .X( {1'b0, stage_cout[CUR_SECOND_STAGES-1]} ),
-                    .Y( {1'b0, stage_partial_product_i[OPERAND_SIZE-1][OPERAND_SIZE-1], stage_sum[CUR_SECOND_STAGES-1]} ),
+    Third_Stage S3( .signed_mul( signed_mul_i ),
+                    .X( stage_cout[CUR_SECOND_STAGES] ),
+                    .Y( stage_sum[CUR_SECOND_STAGES] ),
                     .Sum( stage_result[CUR_SECOND_STAGES-1 + 32 : CUR_SECOND_STAGES] ),
                     .Cout()
                     );
@@ -274,7 +257,7 @@ endmodule
 
 
 module First_Stage( input                       signed_mul,
-                    input  [  OPERAND_SIZE : 0]          X, 
+                    input  [OPERAND_SIZE-2 : 0]          X, 
                     input  [OPERAND_SIZE-1 : 0]          Y, 
                     output [OPERAND_SIZE-1 : 0]        Sum, 
                     output [OPERAND_SIZE-1 : 0]       Cout
@@ -289,17 +272,18 @@ module First_Stage( input                       signed_mul,
         end
     endgenerate
 
-    HalfAdder1 HA0 ( (signed_mul) ? ~X[OPERAND_SIZE-1] : X[OPERAND_SIZE-1], Y[OPERAND_SIZE-1], Sum[OPERAND_SIZE-2], Cout[OPERAND_SIZE-2]);
+    HalfAdder1 HA1 ( (signed_mul) ? ~X[OPERAND_SIZE-2] : X[OPERAND_SIZE-2], Y[OPERAND_SIZE-2], Sum[OPERAND_SIZE-2], Cout[OPERAND_SIZE-2]);
 
-    HalfAdder1 HA0 ( (signed_mul) ? 1'b1 : 0'b0 , (signed_mul) ? ~Y[OPERAND_SIZE-1] : X[OPERAND_SIZE-1], Sum[OPERAND_SIZE-1], Cout[OPERAND_SIZE-1]);
+    HalfAdder1 HA2 ( (signed_mul) ? 1'b1 : 0'b0 , (signed_mul) ? ~Y[OPERAND_SIZE-1] : Y[OPERAND_SIZE-1], Sum[OPERAND_SIZE-1], Cout[OPERAND_SIZE-1]);
 
 endmodule
 
-module Second_Stage(input  [OPERAND_SIZE-2 : 0]   X, 
-                    input  [OPERAND_SIZE-2 : 0]   Y, 
-                    input  [OPERAND_SIZE-2 : 0] Cin, 
-                    output [OPERAND_SIZE-2 : 0] Sum, 
-                    output [OPERAND_SIZE-2 : 0] Cout
+module Second_Stage(input                       signed_mul,
+                    input  [OPERAND_SIZE-1 : 0]          X, // prev stage partial product
+                    input  [OPERAND_SIZE-2 : 0]          Y, // prev stage sum
+                    input  [OPERAND_SIZE-1 : 0]        Cin, // prev stage cout
+                    output [OPERAND_SIZE-1 : 0]        Sum, 
+                    output [OPERAND_SIZE-1 : 0]       Cout
                     );
     parameter OPERAND_SIZE = 32;
 
@@ -311,19 +295,22 @@ module Second_Stage(input  [OPERAND_SIZE-2 : 0]   X,
         end
     endgenerate
 
+    HalfAdder1 HA0 ( (signed_mul) ? ~X[OPERAND_SIZE-1] : X[OPERAND_SIZE-1], Cin[OPERAND_SIZE-1], Sum[OPERAND_SIZE-1], Cout[OPERAND_SIZE-1]);
+
 endmodule
 
 
-module Third_Stage( input  [OPERAND_SIZE-1 : 0] X,
-                    input  [OPERAND_SIZE-1 : 0] Y,
-                    output [OPERAND_SIZE-1 : 0] Sum,
-                    output                      Cout
+module Third_Stage( input                       signed_mul,
+                    input  [OPERAND_SIZE-1 : 0]          X, //prev stage cout
+                    input  [OPERAND_SIZE-2 : 0]          Y, //prev stage sum
+                    output [OPERAND_SIZE-1 : 0]        Sum,
+                    output                            Cout
                     ); // Carry Look-Ahead
 
     parameter OPERAND_SIZE = 32;
 
 	cla_adder_32 cla32( .x( X ), 
-                        .y( Y ), 
+                        .y( {((signed_mul) ? 1'b1 : 1'b0), Y} ), 
                         .sub( 1'b0 ), 
                         .sum( Sum ), 
                         .c_out( Cout )
