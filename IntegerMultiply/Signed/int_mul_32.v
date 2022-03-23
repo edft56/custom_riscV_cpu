@@ -230,9 +230,8 @@ module third_pipe_stage(    input clk_i,
 
     Second_Stage S2(.signed_mul( signed_mul_i ),
                     .X( (signed_mul_i) ? 
-                        stage_partial_product_i[RESULT_INDEX + CUR_SECOND_STAGES-1]:
-                        //{stage_partial_product_i[RESULT_INDEX + CUR_SECOND_STAGES-1][OPERAND_SIZE-1], ~stage_partial_product_i[RESULT_INDEX + CUR_SECOND_STAGES-1][OPERAND_SIZE-2:0]} : 
-                        stage_partial_product_i[RESULT_INDEX + CUR_SECOND_STAGES-1]
+                        ~stage_partial_product_i[OPERAND_SIZE-1] : //double negation on MSB so it's not inverted
+                        stage_partial_product_i[OPERAND_SIZE-1]
                       ), 
                     .Y( stage_sum[CUR_SECOND_STAGES-1] ),
                     .Cin( stage_cout[CUR_SECOND_STAGES-1] ),
@@ -247,7 +246,6 @@ module third_pipe_stage(    input clk_i,
                     .Sum( stage_result[CUR_SECOND_STAGES-1 + 32 : CUR_SECOND_STAGES] ),
                     .Cout()
                     );
-
 
     always @(negedge clk_i) begin
         stage_result_o[RESULT_INDEX-1   :            0] <= stage_result_i[RESULT_INDEX-1 : 0];
@@ -279,7 +277,7 @@ module First_Stage( input                       signed_mul,
 endmodule
 
 module Second_Stage(input                       signed_mul,
-                    input  [OPERAND_SIZE-1 : 0]          X, // prev stage partial product
+                    input  [OPERAND_SIZE-1 : 0]          X, // stage partial product
                     input  [OPERAND_SIZE-2 : 0]          Y, // prev stage sum
                     input  [OPERAND_SIZE-1 : 0]        Cin, // prev stage cout
                     output [OPERAND_SIZE-1 : 0]        Sum, 

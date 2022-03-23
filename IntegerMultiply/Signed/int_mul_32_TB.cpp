@@ -18,7 +18,7 @@ void test_pipelined(){
 
     std::random_device rseed;
     std::mt19937 rng(rseed());
-    std::uniform_int_distribution<int> dist(0, pow(2,30)-1);
+    std::uniform_int_distribution<int> dist(-pow(2,30), pow(2,30)-1);
 
     Verilated::traceEverOn(true);
     VerilatedVcdC* tfp = new VerilatedVcdC;
@@ -28,7 +28,7 @@ void test_pipelined(){
     }
 
     bool correct = true;
-    uint32_t test_times = 100000;
+    uint32_t test_times = 1000000;
 
     int64_t result[5] = {0};
 
@@ -55,7 +55,7 @@ void test_pipelined(){
         }
         result[0] = x_sim * y_sim;
 
-        if(i<10) std::cout<<x_sim<<" "<<y_sim<<" "<<result[4]<<" "<<std::bitset<64>(result[4])<<"  "<<std::bitset<64>(int64_t(top->Result))<<"\n";
+        //if(i<10) std::cout<<x_sim<<" "<<y_sim<<" "<<result[4]<<" "<<std::bitset<64>(result[4])<<"  "<<std::bitset<64>(int64_t(top->Result))<<"\n";
 
         if( i>3 && result[4] != int64_t(top->Result) ) {correct = false; break;}
 
