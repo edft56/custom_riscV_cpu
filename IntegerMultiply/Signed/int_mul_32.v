@@ -20,7 +20,8 @@ module mul32x32_pipelined(  input                                      clk,
     wire                        signed_mul      [2:0];
 
 
-    first_pipe_stage #(.CUR_SECOND_STAGES(8)
+    first_pipe_stage #( .OPERAND_SIZE(OPERAND_SIZE),
+                        .CUR_SECOND_STAGES(8)
                         )
                      P1(.signed_mul_i( signed_mul_i ),
                         .clk_i( clk ),
@@ -34,7 +35,8 @@ module mul32x32_pipelined(  input                                      clk,
                         .stage_result_o(stage_result[0])
                         );
 
-    second_pipe_stage #(.CUR_SECOND_STAGES(9),
+    second_pipe_stage #(.OPERAND_SIZE(OPERAND_SIZE),
+                        .CUR_SECOND_STAGES(9),
                         .RESULT_INDEX(10)
                         )
                       P2(.signed_mul_i( signed_mul[0] ),
@@ -51,7 +53,8 @@ module mul32x32_pipelined(  input                                      clk,
                          .stage_result_o(stage_result[1])
                         );
     
-    second_pipe_stage #(.CUR_SECOND_STAGES(9),
+    second_pipe_stage #(.OPERAND_SIZE(OPERAND_SIZE),
+                        .CUR_SECOND_STAGES(9),
                         .RESULT_INDEX(19)
                         )
                       P3(.signed_mul_i( signed_mul[1] ),
@@ -68,7 +71,8 @@ module mul32x32_pipelined(  input                                      clk,
                          .stage_result_o(stage_result[2])
                         );
 
-    third_pipe_stage #(.CUR_SECOND_STAGES(4),
+    third_pipe_stage #( .OPERAND_SIZE(OPERAND_SIZE),
+                        .CUR_SECOND_STAGES(4),
                         .RESULT_INDEX(28)
                         )
                      P4(.signed_mul_i( signed_mul[2] ),
@@ -113,7 +117,8 @@ module first_pipe_stage(input  clk_i,
     endgenerate
 
 
-    First_Stage S1( .signed_mul( signed_mul_i ),
+    First_Stage #( .OPERAND_SIZE(OPERAND_SIZE) ) 
+                S1( .signed_mul( signed_mul_i ),
                     .X( partial_product[0][OPERAND_SIZE-1 : 1] ), 
                     .Y( partial_product[1][OPERAND_SIZE-1 : 0] ),
                     .Sum( {stage_sum[0],stage_result[1]} ),
@@ -122,7 +127,8 @@ module first_pipe_stage(input  clk_i,
 
     generate
         for(i=0; i<CUR_SECOND_STAGES; i=i+1) begin
-            Second_Stage S2(.signed_mul( signed_mul_i ),
+            Second_Stage #( .OPERAND_SIZE(OPERAND_SIZE) ) 
+                         S2(.signed_mul( signed_mul_i ),
                             .X( partial_product[2+i] ), 
                             .Y( stage_sum[i] ),
                             .Cin( stage_cout[i] ),
@@ -172,7 +178,8 @@ module second_pipe_stage(   input clk_i,
     genvar i;
     generate
         for(i=0; i<CUR_SECOND_STAGES; i=i+1) begin
-            Second_Stage S2(.signed_mul( signed_mul_i ),
+            Second_Stage #( .OPERAND_SIZE(OPERAND_SIZE) ) 
+                         S2(.signed_mul( signed_mul_i ),
                             .X( stage_partial_product_i[RESULT_INDEX + i] ), 
                             .Y( stage_sum[i] ),
                             .Cin( stage_cout[i] ),
@@ -217,7 +224,8 @@ module third_pipe_stage(    input clk_i,
     genvar i;
     generate
         for(i=0; i<CUR_SECOND_STAGES-1; i=i+1) begin
-            Second_Stage S2(.signed_mul( signed_mul_i ),
+            Second_Stage #( .OPERAND_SIZE(OPERAND_SIZE) ) 
+                         S2(.signed_mul( signed_mul_i ),
                             .X( stage_partial_product_i[RESULT_INDEX + i] ), 
                             .Y( stage_sum[i] ),
                             .Cin( stage_cout[i] ),
@@ -228,10 +236,11 @@ module third_pipe_stage(    input clk_i,
     endgenerate
     
 
-    Second_Stage S2(.signed_mul( signed_mul_i ),
+    Second_Stage #( .OPERAND_SIZE(OPERAND_SIZE) ) 
+                 S2(.signed_mul( signed_mul_i ),
                     .X( (signed_mul_i) ? 
-                        ~stage_partial_product_i[OPERAND_SIZE-1] : //double negation on MSB so it's not inverted
-                        stage_partial_product_i[OPERAND_SIZE-1]
+                        ~stage_partial_product_i[RESULT_INDEX + CUR_SECOND_STAGES -1] : //double negation on MSB so it's not inverted
+                        stage_partial_product_i[RESULT_INDEX + CUR_SECOND_STAGES -1]
                       ), 
                     .Y( stage_sum[CUR_SECOND_STAGES-1] ),
                     .Cin( stage_cout[CUR_SECOND_STAGES-1] ),

@@ -18,7 +18,7 @@ void test_pipelined(){
 
     std::random_device rseed;
     std::mt19937 rng(rseed());
-    std::uniform_int_distribution<int> dist(-pow(2,30), pow(2,30)-1);
+    std::uniform_int_distribution<int> dist(-pow(2,30)-1, pow(2,30)-1);
 
     Verilated::traceEverOn(true);
     VerilatedVcdC* tfp = new VerilatedVcdC;
@@ -28,38 +28,48 @@ void test_pipelined(){
     }
 
     bool correct = true;
-    uint32_t test_times = 1000000;
+    uint32_t test_times = 100000;
 
     int64_t result[5] = {0};
 
+    top-> signed_mul_i = 0;
+    top-> X = 0;
+    top-> Y = 0;
+
     for(uint32_t i=0; i<test_times; i++){
         top->clk = 0;
-
-        int64_t x_sim = dist(rng);
-        int64_t y_sim = dist(rng);
         
-        top-> X = (int32_t)x_sim;
-        top-> Y = (int32_t)y_sim;
-        top-> signed_mul_i = 1;
-
         top->eval();            // Evaluate model
         if (trace) tfp->dump(time);
+        if (trace) time++;
+
+
+        bool signed_or_not = i%2==0;
+        
+        int64_t x_sim = dist(rng);
+        int64_t y_sim = dist(rng);
+        x_sim = (signed_or_not) ? x_sim : std::labs(x_sim);
+        y_sim = (signed_or_not) ? y_sim : std::labs(y_sim);
+        
+        top-> signed_mul_i = signed_or_not;
+        top-> X = (int32_t)x_sim;
+        top-> Y = (int32_t)y_sim;
+
 
         top->clk = 1;
         top->eval(); 
         if (trace) tfp->dump(time);
-        
+        if (trace) time++;
         
         for(int j=0; j<4; j++){
             result[4-j] = result[4-j-1];
         }
         result[0] = x_sim * y_sim;
 
-        //if(i<10) std::cout<<x_sim<<" "<<y_sim<<" "<<result[4]<<" "<<std::bitset<64>(result[4])<<"  "<<std::bitset<64>(int64_t(top->Result))<<"\n";
+        //if(i<10) std::cout<<x_sim<<" "<<y_sim<<" "<<result[4]<<" "<<std::bitset<64>(result[4])<<"  "<<std::bitset<64>((uint64_t)top->Result)<<"\n";
 
         if( i>3 && result[4] != int64_t(top->Result) ) {correct = false; break;}
 
-        if (trace) time++;
     }
 
 
