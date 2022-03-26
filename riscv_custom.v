@@ -1,5 +1,10 @@
 `timescale 1ns/1ns
 
+`include "CLA_adder_32/cla_adder_32.v"
+`include "barrel_shifter_32/barrel_shifter_32.v"
+`include "IntegerMultiply/Signed/int_mul_32.v"
+`include "IntegerDivide/int_div_32.v"
+
 `define WL 31 //word length
 `define IMEM_SIZE 8*1024*1024
 `define DMEM_SIZE 8*1024*1024
@@ -29,7 +34,7 @@ module riscv_custom( input clk, input reset);
     wire           immediate_reg_write_DE;
     wire           PC_reg_write_DE;
     wire [`WL:0]   PC_DE;
-    wire [ 3:0]    alu_op_DE;
+    wire [ 4:0]    alu_op_DE;
 
     
     wire [`WL:0]   rs2_data_EX;
@@ -333,7 +338,7 @@ module decode(  input           clk,
                 output reg [`WL:0]  immediate_data_DE,
                 output reg [`WL:0]  branch_PC_DE,
                 output reg [`WL:0]  PC_DE,
-                output reg [  3:0]  alu_op_DE
+                output reg [  4:0]  alu_op_DE
                 );
 
     wire [  6:0] opcode;
@@ -373,7 +378,7 @@ module decode(  input           clk,
                 immediate_reg_write_DE  <= 1'b0;
                 PC_reg_write_DE         <= 1'b0;
 
-                alu_op_DE               <= 4'd0; //dont care
+                alu_op_DE               <= 5'd0; //dont care
 
                 immediate_data_DE       <= 32'd0;
             end
@@ -424,7 +429,7 @@ module decode(  input           clk,
                 immediate_reg_write_DE  <= 1'b0;
                 PC_reg_write_DE         <= 1'b0;
 
-                alu_op_DE               <= 4'd0; //add
+                alu_op_DE               <= 5'd0; //add
 
                 immediate_data_DE       <= { {20{fetched_instruction_IF[31]}} , fetched_instruction_IF[31:20]}; //sign extend
             end
@@ -441,7 +446,7 @@ module decode(  input           clk,
                 immediate_reg_write_DE  <= 1'b0;
                 PC_reg_write_DE         <= 1'b0;
 
-                alu_op_DE               <= 4'd0; //add
+                alu_op_DE               <= 5'd0; //add
 
                 immediate_data_DE       <= { {20{fetched_instruction_IF[31]}}, fetched_instruction_IF[31:25], fetched_instruction_IF[11:7] };
             end
@@ -457,7 +462,7 @@ module decode(  input           clk,
                 immediate_reg_write_DE  <= 1'b0;
                 PC_reg_write_DE         <= 1'b0;
 
-                alu_op_DE               <= {fetched_instruction_IF[30], funct3};
+                alu_op_DE               <= {fetched_instruction_IF[30],fetched_instruction_IF[25], funct3};
 
                 immediate_data_DE       <= 32'd0;
             end
@@ -473,7 +478,7 @@ module decode(  input           clk,
                 immediate_reg_write_DE  <= 1'b0;
                 PC_reg_write_DE         <= 1'b1;
 
-                alu_op_DE               <= 4'd0; //add
+                alu_op_DE               <= 5'd0; //add
 
                 immediate_data_DE       <= {{11{fetched_instruction_IF[31]}},fetched_instruction_IF[31],fetched_instruction_IF[19:12],fetched_instruction_IF[20],fetched_instruction_IF[30:21],1'b0};
             end
@@ -489,7 +494,7 @@ module decode(  input           clk,
                 immediate_reg_write_DE  <= 1'b0;
                 PC_reg_write_DE         <= 1'b1;
 
-                alu_op_DE               <= 4'd0; //add
+                alu_op_DE               <= 5'd0; //add
 
                 immediate_data_DE       <= {{20{fetched_instruction_IF[31]}},fetched_instruction_IF[31:20]};
             end
@@ -505,7 +510,7 @@ module decode(  input           clk,
                 immediate_reg_write_DE  <= 1'b1;
                 PC_reg_write_DE         <= 1'b0;
 
-                alu_op_DE               <= 4'd0; //dont care
+                alu_op_DE               <= 5'd0; //dont care
 
                 immediate_data_DE       <= {fetched_instruction_IF[31:12], 12'd0};
             end
@@ -521,7 +526,7 @@ module decode(  input           clk,
                 immediate_reg_write_DE  <= 1'b0;
                 PC_reg_write_DE         <= 1'b0;
 
-                alu_op_DE               <= 4'd0; //add
+                alu_op_DE               <= 5'd0; //add
 
                 immediate_data_DE       <= {fetched_instruction_IF[31:12], 12'd0};
             end
@@ -537,7 +542,7 @@ module decode(  input           clk,
                 immediate_reg_write_DE  <= 1'b0;
                 PC_reg_write_DE         <= 1'b0;
 
-                alu_op_DE               <= 4'd0; //dont care
+                alu_op_DE               <= 5'd0; //dont care
 
                 immediate_data_DE       <= 32'd0;
             end
@@ -709,12 +714,13 @@ module wb_stage(input [`WL:0] alu_data_MEM,
 endmodule
 
 
-module alu( input [`WL:0] in1,
+module alu( input         clk,
+            input [`WL:0] in1,
             input [`WL:0] in2,
-            input [2:0] op,
-            input funct7_bit,
+            input [  4:0] op,
+
             output reg [`WL:0] out,
-            output reg take_branch
+            output reg         take_branch
             );
     
 
@@ -722,15 +728,18 @@ module alu( input [`WL:0] in1,
     wire [`WL:0] lt_int,ltu_int;
     wire [`WL:0] adder_out;
     wire [`WL:0] shifter_out;
-
+    wire [ 63:0] mul_out;
+    wire [`WL:0] quotient;
+    wire [`WL:0] remainder;
+    wire         div_result_rdy;
 
     assign eq_int = in1 == in2;
     assign lt_int = { 31'd0 , in1 < in2 };
     assign ltu_int = { 31'd0 , $signed(in1) < $signed(in2) };
 
-    cla_adder_32 adder(   .x(in1),
+    cla_adder_32 adder( .x(in1),
                         .y(in2),
-                        .sub(funct7_bit),
+                        .sub(op[4]),
                         .sum(adder_out),
                         .c_out()
                     );
@@ -738,26 +747,54 @@ module alu( input [`WL:0] in1,
     barrel_shifter_32 shift(.x(in1),
                             .shift_by(in2[4:0]), //may need to shift by values > 32
                             .left(~op[2]),
-                            .arith(funct7_bit),
+                            .arith(op[4]),
                             .out(shifter_out)
                             );
+
+    mul32x32_pipelined mul0(.clk(clk),
+                            .signed_mul_i( !(op[2:0] & 3'b011) ),
+                            .X( in1 ),
+                            .Y( in2 ),
+                    
+                            .Result(mul_out)
+                            );
+
+    int_div_32 div0(.clk_i(clk),
+                    .load_i( op[3:2] & 2'b11 ),
+                    .dividend_i( in1 ),
+                    .divisor_i( in2 ),
+                    .signed_i( {op[3:2],op[0]} & 3'b110 ),
+
+                    .result_rdy( div_result_rdy ),
+                    .quotient_o( quotient ),
+                    .remainder_o( remainder )   
+                    );
 
 
     always @*
     begin
-        case( op )
-            3'b000: out = adder_out;
-            3'b001: out = shifter_out;
-            3'b010: out = lt_int; 
-            3'b011: out = ltu_int; 
-            3'b100: out = in1 ^ in2;
-            3'b101: out = shifter_out;
-            3'b110: out = in1 | in2;
-            3'b111: out = in1 & in2;
+        case( op[3:0] )
+            4'b0000: out = adder_out;
+            4'b0001: out = shifter_out;
+            4'b0010: out = lt_int; 
+            4'b0011: out = ltu_int; 
+            4'b0100: out = in1 ^ in2;
+            4'b0101: out = shifter_out;
+            4'b0110: out = in1 | in2;
+            4'b0111: out = in1 & in2;
+
+            4'b1000: out = MUL;
+            4'b1001: out = MULH;
+            4'b1010: out = MULHSU;
+            4'b1011: out = MULHU ;
+            4'b1100: out = DIV;
+            4'b1101: out = DIVU;
+            4'b1110: out = REM;
+            4'b1111: out = REMU;
             default: out = 0;
         endcase
 
-        case( op )
+        case( op[2:0] )
             3'b000: take_branch = eq_int;
             3'b001: take_branch = ~eq_int;
             3'b100: take_branch = lt_int[0];
@@ -914,7 +951,7 @@ module control( input clk_i,
                                 .forward_WB_MEM( forward_WB_MEM_o )
                                 );
 
-    interlock_logic intl_logic( .opcode_DE( opcode_DE_i ),
+    RAW_interlock_logic intl_logic( .opcode_DE( opcode_DE_i ),
                                 .opcode_IF( fetched_instruction_IF_i[6:0] ),
                                 .rs1_idx_IF( fetched_instruction_IF_i[19:15] ),
                                 .rs2_idx_IF( fetched_instruction_IF_i[24:20] ),
@@ -961,7 +998,7 @@ module forwarding_logic(input [6:0] opcode_DE,
 
 endmodule
 
-module interlock_logic( input [6:0] opcode_DE,
+module RAW_interlock_logic( input [6:0] opcode_DE,
                         input [6:0] opcode_IF,
                         input [4:0] rs1_idx_IF,
                         input [4:0] rs2_idx_IF,

@@ -1,6 +1,6 @@
 `timescale 1ns/1ns
 
-module top(   input [31:0] x,
+module barrel_shifter_32(   input [31:0] x,
                             input [4:0] shift_by,
                             input left,
                             input arith,
