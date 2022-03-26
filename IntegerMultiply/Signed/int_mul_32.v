@@ -5,10 +5,12 @@
 
 
 module mul32x32_pipelined(  input                                      clk,
+                            input                                    start,
                             input                             signed_mul_i,
                             input      [OPERAND_SIZE-1   : 0]            X,
                             input      [OPERAND_SIZE-1   : 0]            Y,
                         
+                            output reg                        result_rdy,
                             output reg [2*OPERAND_SIZE-1 : 0] Result
                             );
     parameter OPERAND_SIZE = 32;
@@ -18,6 +20,8 @@ module mul32x32_pipelined(  input                                      clk,
     wire [OPERAND_SIZE-1   : 0] partial_product [2:0][OPERAND_SIZE-1 : 0];
     wire [2*OPERAND_SIZE-1 : 0] stage_result    [2:0];
     wire                        signed_mul      [2:0];
+
+    reg  [               3 : 0] pipe_state;
 
 
     first_pipe_stage #( .OPERAND_SIZE(OPERAND_SIZE),
@@ -85,6 +89,12 @@ module mul32x32_pipelined(  input                                      clk,
                         .stage_result_o(Result)
                         );
 
+    always @(negedge clk)
+    begin
+        pipe_state[2:0] <= pipe_state[3:1];
+        pipe_state[3]   <= (start) ? 1'b1 : 1'b0;
+        result_rdy      <= pipe_state[0];
+    end
 
 endmodule
 

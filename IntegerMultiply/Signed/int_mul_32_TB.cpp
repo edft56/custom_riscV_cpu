@@ -68,7 +68,7 @@ void test_pipelined(){
 
         //if(i<10) std::cout<<x_sim<<" "<<y_sim<<" "<<result[4]<<" "<<std::bitset<64>(result[4])<<"  "<<std::bitset<64>((uint64_t)top->Result)<<"\n";
 
-        if( i>3 && result[4] != int64_t(top->Result) ) {correct = false; break;}
+        if( bool(top->result_rdy) && (result[4] != int64_t(top->Result))  ) {correct = false; break;}
 
     }
 
