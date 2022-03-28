@@ -25,11 +25,9 @@ module riscv_custom( input clk, input reset);
     wire [`WL:0]   alu_result;
     wire           PC_alu_input_DE;
     wire           immediate_alu_input_DE;
-    wire           alu_write_reg_DE;
-    wire           immediate_reg_write_DE;
-    wire           PC_reg_write_DE;
+    wire [  3:0]   reg_write_input_DE;
     wire [`WL:0]   PC_DE;
-    wire [ 4:0]    alu_op_DE;
+    wire [  4:0]   alu_op_DE;
 
     
     wire [`WL:0]   rs2_data_EX;
@@ -43,9 +41,7 @@ module riscv_custom( input clk, input reset);
     wire [ 2:0]    funct3_EX;
     wire [`WL:0]   immediate_data_EX;
     wire [`WL:0]   PC_EX;
-    wire           alu_write_reg_EX;
-    wire           immediate_reg_write_EX;
-    wire           PC_reg_write_EX;
+    wire [  3:0]   reg_write_input_EX;
 
     wire [ 4:0]    rd_idx_MEM;
     wire [`WL:0]   ALU_result_MEM;
@@ -54,10 +50,7 @@ module riscv_custom( input clk, input reset);
     wire [ 2:0]    funct3_MEM;
     wire [`WL:0]   immediate_data_MEM;
     wire [`WL:0]   PC_MEM;
-    wire           alu_write_reg_MEM;
-    wire           immediate_reg_write_MEM;
-    wire           PC_reg_write_MEM;
-    wire           mem_reg_write_MEM;
+    wire [  3:0]   reg_write_input_MEM;
 
     wire           forward_rs1_MEM_EX;
     wire           forward_rs2_MEM_EX;
@@ -69,7 +62,7 @@ module riscv_custom( input clk, input reset);
 
 
     registerFile regFile(   .clk( clk ),
-                            .write( alu_write_reg_MEM | immediate_reg_write_MEM | PC_reg_write_MEM | mem_reg_write_MEM ),
+                            .write( reg_write_input_MEM != 0 ),
                             .rd_idx( rd_idx_MEM ),
                             .rd_data( rd_data ),
                             .rs1_idx( fetched_instruction_IF[19:15] ),
@@ -109,9 +102,7 @@ module riscv_custom( input clk, input reset);
                         .immediate_alu_input_DE( immediate_alu_input_DE ),
                         .data_mem_cs_DE( data_mem_cs_DE ),
                         .data_mem_wr_DE( data_mem_wr_DE ),
-                        .alu_write_reg_DE( alu_write_reg_DE ),
-                        .immediate_reg_write_DE( immediate_reg_write_DE ),
-                        .PC_reg_write_DE( PC_reg_write_DE ),
+                        .reg_write_input_DE( reg_write_input_DE ),
                         .immediate_data_DE( immediate_data_DE ),
                         .branch_PC_DE( branch_PC_DE ),
                         .PC_DE( PC_DE ),
@@ -139,9 +130,7 @@ module riscv_custom( input clk, input reset);
                             .branch_instruction_DE( branch_instruction_DE ),
                             .PC_alu_input_DE( PC_alu_input_DE ),
                             .immediate_alu_input_DE( immediate_alu_input_DE ),
-                            .alu_write_reg_DE( alu_write_reg_DE ),
-                            .immediate_reg_write_DE( immediate_reg_write_DE ),
-                            .PC_reg_write_DE( PC_reg_write_DE ),
+                            .reg_write_input_DE( reg_write_input_DE ),
 
                             .alu_result_EX( ALU_result_EX ),
                             .rs2_data_EX( rs2_data_EX ),
@@ -149,9 +138,7 @@ module riscv_custom( input clk, input reset);
                             .PC_EX( PC_EX ),
                             .data_mem_cs_EX( data_mem_cs_EX ),
                             .data_mem_wr_EX( data_mem_wr_EX ),
-                            .alu_write_reg_EX( alu_write_reg_EX ),
-                            .immediate_reg_write_EX( immediate_reg_write_EX ),
-                            .PC_reg_write_EX( PC_reg_write_EX ),
+                            .reg_write_input_EX( reg_write_input_EX ),
                             .rd_idx_EX( rd_idx_EX ),
                             .rs2_idx_EX( rs2_idx_EX ),
                             .opcode_EX( opcode_EX ),
@@ -166,9 +153,7 @@ module riscv_custom( input clk, input reset);
                             .rs2_data_EX( rs2_data_EX ),
                             .data_mem_cs_EX( data_mem_cs_EX ),
                             .data_mem_wr_EX( data_mem_wr_EX ),
-                            .alu_write_reg_EX( alu_write_reg_EX ),
-                            .immediate_reg_write_EX( immediate_reg_write_EX ),
-                            .PC_reg_write_EX( PC_reg_write_EX ),
+                            .reg_write_input_EX( reg_write_input_EX ),
                             .rd_idx_EX( rd_idx_EX ),
                             .opcode_EX( opcode_EX ),
                             .forward_WB_MEM( forward_WB_MEM ),
@@ -181,10 +166,7 @@ module riscv_custom( input clk, input reset);
                             .alu_result_MEM( ALU_result_MEM ),
                             .PC_MEM( PC_MEM ),
                             .immediate_data_MEM( immediate_data_MEM ),
-                            .alu_write_reg_MEM( alu_write_reg_MEM ),
-                            .immediate_reg_write_MEM( immediate_reg_write_MEM ),
-                            .PC_reg_write_MEM( PC_reg_write_MEM ),
-                            .mem_reg_write_MEM( mem_reg_write_MEM ),
+                            .reg_write_input_MEM( reg_write_input_MEM ),
                             .rd_idx_MEM( rd_idx_MEM ),
                             .opcode_MEM( opcode_MEM ),
                             .funct3_MEM( funct3_MEM )
@@ -196,10 +178,7 @@ module riscv_custom( input clk, input reset);
                         .PC_MEM( PC_MEM ),
                         .immediate_data_MEM( immediate_data_MEM ),
                         .funct3_MEM( funct3_MEM ),
-                        .alu_write_reg_MEM( alu_write_reg_MEM ),
-                        .immediate_reg_write_MEM( immediate_reg_write_MEM ),
-                        .PC_reg_write_MEM( PC_reg_write_MEM ),
-                        .mem_reg_write_MEM( mem_reg_write_MEM ),
+                        .reg_write_input_MEM( reg_write_input_MEM ),
                         
                         .rd_data( rd_data )
                     );
@@ -327,9 +306,7 @@ module decode(  input           clk,
                 output reg          PC_alu_input_DE,
                 output reg          immediate_alu_input_DE,
                 output reg          data_mem_cs_DE, data_mem_wr_DE,
-                output reg          alu_write_reg_DE,
-                output reg          immediate_reg_write_DE,
-                output reg          PC_reg_write_DE,
+                output reg [  3:0]  reg_write_input_DE,  // 1000 mem, 0100 alu, 0010 immediate, 0001 PC
                 output reg [`WL:0]  immediate_data_DE,
                 output reg [`WL:0]  branch_PC_DE,
                 output reg [`WL:0]  PC_DE,
@@ -369,9 +346,7 @@ module decode(  input           clk,
                 data_mem_wr_DE          <= 1'b0;
                 immediate_alu_input_DE  <= 1'b0;
                 PC_alu_input_DE         <= 1'b0;
-                alu_write_reg_DE        <= 1'b0;
-                immediate_reg_write_DE  <= 1'b0;
-                PC_reg_write_DE         <= 1'b0;
+                reg_write_input_DE      <= 4'b0000;
 
                 alu_op_DE               <= 5'd0; //dont care
 
@@ -385,11 +360,9 @@ module decode(  input           clk,
                 data_mem_wr_DE          <= 1'b0;
                 immediate_alu_input_DE  <= 1'b1;
                 PC_alu_input_DE         <= 1'b0;
-                alu_write_reg_DE        <= 1'b0;
-                immediate_reg_write_DE  <= 1'b0;
-                PC_reg_write_DE         <= 1'b0;
+                reg_write_input_DE      <= 4'b0000;
 
-                alu_op_DE               <= {1'b0,funct3}; //add
+                alu_op_DE               <= {2'b0,funct3}; //add
 
                 immediate_data_DE       <= branch_immediate_data;
             end
@@ -401,11 +374,9 @@ module decode(  input           clk,
                 data_mem_wr_DE          <= 1'b0;
                 immediate_alu_input_DE  <= 1'b1;
                 PC_alu_input_DE         <= 1'b0;
-                alu_write_reg_DE        <= 1'b1;
-                immediate_reg_write_DE  <= 1'b0;
-                PC_reg_write_DE         <= 1'b0;
+                reg_write_input_DE      <= 4'b0100;
                                                                             //SLRI,SRAI
-                alu_op_DE               <= {fetched_instruction_IF[30] & (funct3 == 3'b101), funct3};
+                alu_op_DE               <= {1'b0, fetched_instruction_IF[30] & (funct3 == 3'b101), funct3};
 
                                             //SLLI,SRLI,SRAI
                 immediate_data_DE       <= (funct3 == 3'b001 & funct3 == 3'b101) 
@@ -420,9 +391,7 @@ module decode(  input           clk,
                 data_mem_wr_DE          <= 1'b0;
                 immediate_alu_input_DE  <= 1'b1;
                 PC_alu_input_DE         <= 1'b0;
-                alu_write_reg_DE        <= 1'b0;
-                immediate_reg_write_DE  <= 1'b0;
-                PC_reg_write_DE         <= 1'b0;
+                reg_write_input_DE      <= 4'b1000;
 
                 alu_op_DE               <= 5'd0; //add
 
@@ -437,9 +406,7 @@ module decode(  input           clk,
                 data_mem_wr_DE          <= 1'b1;
                 immediate_alu_input_DE  <= 1'b1;
                 PC_alu_input_DE         <= 1'b0;
-                alu_write_reg_DE        <= 1'b0;
-                immediate_reg_write_DE  <= 1'b0;
-                PC_reg_write_DE         <= 1'b0;
+                reg_write_input_DE      <= 4'b0000;
 
                 alu_op_DE               <= 5'd0; //add
 
@@ -453,9 +420,7 @@ module decode(  input           clk,
                 data_mem_wr_DE          <= 1'b0;
                 immediate_alu_input_DE  <= 1'b0;
                 PC_alu_input_DE         <= 1'b0;
-                alu_write_reg_DE        <= 1'b1;
-                immediate_reg_write_DE  <= 1'b0;
-                PC_reg_write_DE         <= 1'b0;
+                reg_write_input_DE      <= 4'b0100;
 
                 alu_op_DE               <= {fetched_instruction_IF[30],fetched_instruction_IF[25], funct3};
 
@@ -469,9 +434,7 @@ module decode(  input           clk,
                 data_mem_wr_DE          <= 1'b0;
                 immediate_alu_input_DE  <= 1'b1;
                 PC_alu_input_DE         <= 1'b1;
-                alu_write_reg_DE        <= 1'b0;
-                immediate_reg_write_DE  <= 1'b0;
-                PC_reg_write_DE         <= 1'b1;
+                reg_write_input_DE      <= 4'b0001;
 
                 alu_op_DE               <= 5'd0; //add
 
@@ -485,9 +448,7 @@ module decode(  input           clk,
                 data_mem_wr_DE          <= 1'b0;
                 immediate_alu_input_DE  <= 1'b1;
                 PC_alu_input_DE         <= 1'b0;
-                alu_write_reg_DE        <= 1'b0;
-                immediate_reg_write_DE  <= 1'b0;
-                PC_reg_write_DE         <= 1'b1;
+                reg_write_input_DE      <= 4'b0001;
 
                 alu_op_DE               <= 5'd0; //add
 
@@ -501,9 +462,7 @@ module decode(  input           clk,
                 data_mem_wr_DE          <= 1'b0;
                 immediate_alu_input_DE  <= 1'b0;
                 PC_alu_input_DE         <= 1'b0;
-                alu_write_reg_DE        <= 1'b0;
-                immediate_reg_write_DE  <= 1'b1;
-                PC_reg_write_DE         <= 1'b0;
+                reg_write_input_DE      <= 4'b0010;
 
                 alu_op_DE               <= 5'd0; //dont care
 
@@ -517,9 +476,7 @@ module decode(  input           clk,
                 data_mem_wr_DE          <= 1'b0;
                 immediate_alu_input_DE  <= 1'b1;
                 PC_alu_input_DE         <= 1'b1;
-                alu_write_reg_DE        <= 1'b1;
-                immediate_reg_write_DE  <= 1'b0;
-                PC_reg_write_DE         <= 1'b0;
+                reg_write_input_DE      <= 4'b0100;
 
                 alu_op_DE               <= 5'd0; //add
 
@@ -533,9 +490,7 @@ module decode(  input           clk,
                 data_mem_wr_DE          <= 1'b0;
                 immediate_alu_input_DE  <= 1'b0;
                 PC_alu_input_DE         <= 1'b0;
-                alu_write_reg_DE        <= 1'b0;
-                immediate_reg_write_DE  <= 1'b0;
-                PC_reg_write_DE         <= 1'b0;
+                reg_write_input_DE      <= 4'b0000;
 
                 alu_op_DE               <= 5'd0; //dont care
 
@@ -550,7 +505,7 @@ module exec_stage(  input clk,
                     input [`WL:0]   rs1_data_DE, rs2_data_DE, immediate_data_DE,
                     input [`WL:0]   PC_DE,
                     input [  4:0]   rd_idx_DE, rs2_idx_DE,
-                    input [  3:0]   alu_op_DE,
+                    input [  4:0]   alu_op_DE,
                     input [  6:0]   opcode_DE,
                     input [  2:0]   funct3_DE,
                     input [`WL:0]   forwarded_data_MEM, forwarded_data_WB,
@@ -559,21 +514,17 @@ module exec_stage(  input clk,
                     input           branch_instruction_DE,
                     input           PC_alu_input_DE,
                     input           immediate_alu_input_DE,
-                    input           alu_write_reg_DE,
-                    input           immediate_reg_write_DE,
-                    input           PC_reg_write_DE,
+                    input [  3:0]   reg_write_input_DE,
                     
                     output reg [`WL:0]  alu_result_EX,
                     output reg [`WL:0]  rs2_data_EX,
                     output reg [`WL:0]  immediate_data_EX,
                     output reg [`WL:0]  PC_EX,
                     output reg          data_mem_cs_EX, data_mem_wr_EX,
-                    output reg          alu_write_reg_EX,
-                    output reg          immediate_reg_write_EX,
-                    output reg          PC_reg_write_EX,
-                    output reg [4:0]    rd_idx_EX, rs2_idx_EX,
-                    output reg [6:0]    opcode_EX,
-                    output reg [2:0]    funct3_EX,
+                    output reg [  3:0]  reg_write_input_EX,
+                    output reg [  4:0]  rd_idx_EX, rs2_idx_EX,
+                    output reg [  6:0]  opcode_EX,
+                    output reg [  2:0]  funct3_EX,
                     
                     output     [`WL:0]  alu_result,
                     output              take_branch
@@ -590,10 +541,11 @@ module exec_stage(  input clk,
     assign alu_input1 = (forward_rs1_MEM_EX | forward_rs1_WB_EX) ? forwarded_rs1_data : ( (PC_alu_input_DE)        ? PC_DE             : rs1_data_DE );
     assign alu_input2 = (forward_rs2_MEM_EX | forward_rs2_WB_EX) ? forwarded_rs2_data : ( (immediate_alu_input_DE) ? immediate_data_DE : rs2_data_DE );
 
-    alu alu_unit(   .in1(alu_input1),
+    alu alu_unit(   .clk(clk),
+                    .in1(alu_input1),
                     .in2(alu_input2),
-                    .op(alu_op_DE[2:0]),
-                    .funct7_bit(alu_op_DE[3]),
+                    .op(alu_op_DE),
+
                     .out(alu_result),
                     .take_branch(branch_cond));
 
@@ -604,9 +556,7 @@ module exec_stage(  input clk,
         alu_result_EX           <= alu_result;
         data_mem_cs_EX          <= data_mem_cs_DE;
         data_mem_wr_EX          <= data_mem_wr_DE;
-        alu_write_reg_EX        <= alu_write_reg_DE;
-        immediate_reg_write_EX  <= immediate_reg_write_DE;
-        PC_reg_write_EX         <= PC_reg_write_DE;
+        reg_write_input_EX      <= reg_write_input_DE;
         rs2_data_EX             <= rs2_data_DE;
         rd_idx_EX               <= rd_idx_DE;
         opcode_EX               <= opcode_DE;
@@ -623,9 +573,7 @@ module mem_stage(   input           clk,
                     input [`WL:0]   alu_result_EX,
                     input [`WL:0]   rs2_data_EX,
                     input           data_mem_cs_EX, data_mem_wr_EX,
-                    input           alu_write_reg_EX,
-                    input           immediate_reg_write_EX,
-                    input           PC_reg_write_EX,
+                    input [  3:0]   reg_write_input_EX,
                     input [  4:0]   rd_idx_EX,
                     input [  6:0]   opcode_EX,
                     input           forward_WB_MEM,
@@ -638,10 +586,7 @@ module mem_stage(   input           clk,
                     output reg  [`WL:0] alu_result_MEM,
                     output reg  [`WL:0] PC_MEM,
                     output reg  [`WL:0] immediate_data_MEM,
-                    output              alu_write_reg_MEM,
-                    output              immediate_reg_write_MEM,
-                    output              PC_reg_write_MEM,
-                    output              mem_reg_write_MEM,
+                    output reg  [  3:0] reg_write_input_MEM,
                     output reg  [  4:0] rd_idx_MEM,
                     output reg  [  6:0] opcode_MEM,
                     output reg  [  2:0] funct3_MEM
@@ -662,10 +607,7 @@ module mem_stage(   input           clk,
     always @(negedge clk)
     begin
         //mem_result_MEM    <= (data_mem_cs_EX & data_mem_wr_EX) ? mem_out : mem_result_MEM;
-        alu_write_reg_MEM        <= alu_write_reg_EX;
-        immediate_reg_write_MEM  <= immediate_reg_write_EX;
-        PC_reg_write_MEM         <= PC_reg_write_EX;
-        mem_reg_write_MEM        <= (data_mem_cs_EX & !data_mem_wr_EX);
+        reg_write_input_MEM      <= reg_write_input_EX;
         PC_MEM                   <= PC_EX;
         alu_result_MEM           <= alu_result_EX;
         rd_idx_MEM               <= rd_idx_EX;
@@ -681,10 +623,7 @@ module wb_stage(input [`WL:0] alu_data_MEM,
                 input [`WL:0] PC_MEM,
                 input [`WL:0] immediate_data_MEM,
                 input [2:0] funct3_MEM,
-                input alu_write_reg_MEM,
-                input immediate_reg_write_MEM,
-                input PC_reg_write_MEM,
-                input mem_reg_write_MEM,
+                input [3:0] reg_write_input_MEM,
                 
                 output [`WL:0] rd_data
                 );
@@ -699,11 +638,13 @@ module wb_stage(input [`WL:0] alu_data_MEM,
     assign rd_data = rd_data_internal;
 
     always @* begin
-        if      (alu_write_reg_MEM)         rd_data_internal = alu_data_MEM;
-        else if (immediate_reg_write_MEM)   rd_data_internal = immediate_data_MEM;
-        else if (PC_reg_write_MEM)          rd_data_internal = PC_MEM;
-        else if (mem_reg_write_MEM)         rd_data_internal = mem_data;
-        else                                rd_data_internal = alu_data_MEM; //dont care
+        case ( reg_write_input_MEM )
+            4'b0001:  rd_data_internal = PC_MEM;
+            4'b0010:  rd_data_internal = immediate_data_MEM;
+            4'b0100:  rd_data_internal = alu_data_MEM;
+            4'b1000:  rd_data_internal = mem_data;
+            default:  rd_data_internal = alu_data_MEM;
+        endcase
     end
 
 endmodule
@@ -722,13 +663,14 @@ module alu( input         clk,
     wire [`WL:0] lt_int,ltu_int;
     wire [`WL:0] adder_out;
     wire [`WL:0] shifter_out;
-    wire [`WL:0] I_out; //output of 1 clk alu instructions that belong to the I-set.
+    
     wire [ 63:0] mul_out;
     wire [`WL:0] quotient;
     wire [`WL:0] remainder;
     wire         div_done;
-    wire         mul_start;
-    wire         div_start;
+    wire         mul_done;
+
+    reg [`WL:0] I_out; //output of 1 clk alu instructions that belong to the I-set.
 
     // because we check for structural hazards and for overlapping outputs during ID, just need to check if unit result rdy
     // and then select the proper output. In correct operation, there won't be an output ready from adder + multipler for example
@@ -754,9 +696,9 @@ module alu( input         clk,
                             .out(shifter_out)
                             );
 
-    mul32x32_pipelined mul0(.clk(clk),
-                            .start(),
-                            .signed_mul_i( !(op[2:0] & 3'b011) ),
+    int_mul_32 mul0(.clk(clk),
+                            .start( op[3:2] == 2'b10 ),
+                            .signed_mul_i( !(op[2:0] == 3'b011) ),
                             .X( in1 ),
                             .Y( in2 ),
 
@@ -765,10 +707,10 @@ module alu( input         clk,
                             );
 
     int_div_32 div0(.clk_i(clk),
-                    .load_i( op[3:2] & 2'b11 ),
+                    .load_i( op[3:2] == 2'b11 ),
                     .dividend_i( in1 ),
                     .divisor_i( in2 ),
-                    .signed_i( {op[3:2],op[0]} & 3'b110 ),
+                    .signed_i( {op[3:2],op[0]} == 3'b110 ),
 
                     .result_rdy( div_done ),
                     .quotient_o( quotient ),
@@ -777,9 +719,9 @@ module alu( input         clk,
 
     always @(negedge clk)
     begin
-        mul_queue[2:0] <= mul_queue[3:1]; // risght shift
+        mul_queue[2:0] <= mul_queue[3:1]; // right shift
         mul_queue[3]   <= op[0]; 
-        div_queue      <= (op[3:2] & 2'b11) ? op[1] : div_queue;
+        div_queue      <= (op[3:2] == 2'b11) ? op[1] : div_queue;
     end
 
     always @*
@@ -806,9 +748,9 @@ module alu( input         clk,
             default: take_branch = 0;
         endcase
 
-        if(mul_done)        out <= (mul_queue[0]) ? mul_out[63:32] : mul_out[31:0];
-        else if (div_done)  out <= (div_queue) ? quotient : remainder;
-        else                out <= I_out;
+        if(mul_done)        out = (mul_queue[0]) ? mul_out[63:32] : mul_out[31:0];
+        else if (div_done)  out = (div_queue) ? quotient : remainder;
+        else                out = I_out;
     end
 
 endmodule
@@ -938,6 +880,10 @@ module control( input clk_i,
                 output forward_WB_MEM_o,
                 output interlock_stall_o
                 );
+    
+    wire RAW_stall;
+
+    assign interlock_stall_o = RAW_stall;
 
 
     forwarding_logic fwd_logic( .opcode_DE( opcode_DE_i ),
@@ -962,7 +908,7 @@ module control( input clk_i,
                                 .rs2_idx_IF( fetched_instruction_IF_i[24:20] ),
                                 .rd_idx_DE( rd_idx_DE_i ),
 
-                                .stall_pipeline( interlock_stall_o )
+                                .stall_pipeline( RAW_stall )
                                 );
   
 endmodule
@@ -1033,3 +979,35 @@ module RAW_interlock_logic( input [6:0] opcode_DE,
 
 endmodule
 
+module structural_interlock_logic(  input clk_i,
+                                    input [31:0] fetched_instruction_IF_i,
+                                    input RAW_stall,
+                                    
+                                    output stall_pipeline);
+
+    wire [6:0] opcode = fetched_instruction_IF_i[6:0];
+    wire [6:0] funct7 = fetched_instruction_IF_i[31:25];
+    wire [2:0] funct3 = fetched_instruction_IF_i[14:12];
+    wire       div_instruction;
+    wire       mul_instruction;
+    wire       start_cnt;
+    wire       div_stall;
+
+    reg  [ 5:0] div_counter;
+    reg  [33:0] write_reg_port_usage;
+
+    assign div_instruction = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 0);
+    assign mul_instruction = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 1);
+    assign start_cnt       = (div_counter == 0 & div_instruction);
+    assign div_stall       = div_instruction & div_counter != 0;
+
+    assign stall_pipeline  = div_stall;
+
+
+    always @(negedge clk_i) begin
+        div_counter                <= ( (div_counter == 0 & start_cnt) | div_counter != 0 ) ? div_counter + 1 : div_counter;
+        write_reg_port_usage[32:0] <= write_reg_port_usage[33:1];
+        write_reg_port_usage[3]    <= ~RAW_stall & ~stall_pipeline & mul_instruction;
+        write_reg_port_usage[33]   <= ~RAW_stall & ~stall_pipeline & div_instruction;
+    end
+endmodule

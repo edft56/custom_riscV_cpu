@@ -1,11 +1,11 @@
 `timescale 1ns/1ns
 
 
-`include "/home/stefan/Desktop/Verilog/custom_riscV_cpu/CLA_adder_32/cla_adder_32.v"
+`include "../../CLA_adder_32/cla_adder_32.v"
 
 
 
-module mul32x32_pipelined(  input                                      clk,
+module int_mul_32(  input                                      clk,
                             input                                    start,
                             input                             signed_mul_i,
                             input      [OPERAND_SIZE-1   : 0]            X,

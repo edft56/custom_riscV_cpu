@@ -1,6 +1,6 @@
 #include <verilated.h>          // Defines common routines
 #include <iostream>             // Need std::cout
-#include "Vmul32x32_pipelined.h"      // From Verilating "top.v"
+#include "Vint_mul_32.h"      // From Verilating "top.v"
 #include "verilated_vcd_c.h"
 
 #include <cmath>
@@ -12,7 +12,7 @@ constexpr bool trace = false;
 
 
 void test_pipelined(){
-    Vmul32x32_pipelined* top = new Vmul32x32_pipelined;
+    Vint_mul_32* top = new Vint_mul_32;
 
     vluint64_t time = 0;
 

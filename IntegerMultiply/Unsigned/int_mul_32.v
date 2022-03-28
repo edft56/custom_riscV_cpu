@@ -1,6 +1,6 @@
 `timescale 1ns/1ns
 
-`include "../CLA_adder_32/cla_adder_32.v"
+`include "../../CLA_adder_32/cla_adder_32.v"
 
 
 

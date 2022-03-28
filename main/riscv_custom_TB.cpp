@@ -3,7 +3,7 @@
 #include "Vriscv_custom.h"               // From Verilating "top.v"
 #include "verilated_vcd_c.h"
 
-#include "riscv_assembler/riscv_assembler.h"
+#include "../riscv_assembler/riscv_assembler.h"
 
 #include <cmath>
 #include <bitset>

@@ -2,8 +2,8 @@
 
 
 
-
-module mul32x32_pipelined(  input                                      clk,
+//pipelined
+module int_mul_32(  input                                      clk,
                             input                                    start,
                             input                             signed_mul_i,
                             input      [OPERAND_SIZE-1   : 0]            X,
