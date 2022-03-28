@@ -1,10 +1,5 @@
 `timescale 1ns/1ns
 
-`include "CLA_adder_32/cla_adder_32.v"
-`include "barrel_shifter_32/barrel_shifter_32.v"
-`include "IntegerMultiply/Signed/int_mul_32.v"
-`include "IntegerDivide/int_div_32.v"
-
 `define WL 31 //word length
 `define IMEM_SIZE 8*1024*1024
 `define DMEM_SIZE 8*1024*1024
@@ -723,15 +718,23 @@ module alu( input         clk,
             output reg         take_branch
             );
     
-
     wire eq_int;
     wire [`WL:0] lt_int,ltu_int;
     wire [`WL:0] adder_out;
     wire [`WL:0] shifter_out;
+    wire [`WL:0] I_out; //output of 1 clk alu instructions that belong to the I-set.
     wire [ 63:0] mul_out;
     wire [`WL:0] quotient;
     wire [`WL:0] remainder;
-    wire         div_result_rdy;
+    wire         div_done;
+    wire         mul_start;
+    wire         div_start;
+
+    // because we check for structural hazards and for overlapping outputs during ID, just need to check if unit result rdy
+    // and then select the proper output. In correct operation, there won't be an output ready from adder + multipler for example
+    reg          mul_queue      [3:0]; //stores if upper or lower should be selected (0 lower, 1 upper)
+    reg          div_queue;            //stores if quotient or remainder should be selected (0 quotient, 1 remainder)
+
 
     assign eq_int = in1 == in2;
     assign lt_int = { 31'd0 , in1 < in2 };
@@ -752,10 +755,12 @@ module alu( input         clk,
                             );
 
     mul32x32_pipelined mul0(.clk(clk),
+                            .start(),
                             .signed_mul_i( !(op[2:0] & 3'b011) ),
                             .X( in1 ),
                             .Y( in2 ),
-                    
+
+                            .result_rdy( mul_done ),
                             .Result(mul_out)
                             );
 
@@ -765,32 +770,29 @@ module alu( input         clk,
                     .divisor_i( in2 ),
                     .signed_i( {op[3:2],op[0]} & 3'b110 ),
 
-                    .result_rdy( div_result_rdy ),
+                    .result_rdy( div_done ),
                     .quotient_o( quotient ),
                     .remainder_o( remainder )   
                     );
 
+    always @(negedge clk)
+    begin
+        mul_queue[2:0] <= mul_queue[3:1]; // risght shift
+        mul_queue[3]   <= op[0]; 
+        div_queue      <= (op[3:2] & 2'b11) ? op[1] : div_queue;
+    end
 
     always @*
     begin
-        case( op[3:0] )
-            4'b0000: out = adder_out;
-            4'b0001: out = shifter_out;
-            4'b0010: out = lt_int; 
-            4'b0011: out = ltu_int; 
-            4'b0100: out = in1 ^ in2;
-            4'b0101: out = shifter_out;
-            4'b0110: out = in1 | in2;
-            4'b0111: out = in1 & in2;
-
-            4'b1000: out = MUL;
-            4'b1001: out = MULH;
-            4'b1010: out = MULHSU;
-            4'b1011: out = MULHU ;
-            4'b1100: out = DIV;
-            4'b1101: out = DIVU;
-            4'b1110: out = REM;
-            4'b1111: out = REMU;
+        case( op[2:0] )
+            3'b000: I_out = adder_out;
+            3'b001: I_out = shifter_out;
+            3'b010: I_out = lt_int; 
+            3'b011: I_out = ltu_int; 
+            3'b100: I_out = in1 ^ in2;
+            3'b101: I_out = shifter_out;
+            3'b110: I_out = in1 | in2;
+            3'b111: I_out = in1 & in2;
             default: out = 0;
         endcase
 
@@ -802,8 +804,11 @@ module alu( input         clk,
             3'b110: take_branch = ltu_int[0];
             3'b111: take_branch = ~ltu_int[0];
             default: take_branch = 0;
-            
         endcase
+
+        if(mul_done)        out <= (mul_queue[0]) ? mul_out[63:32] : mul_out[31:0];
+        else if (div_done)  out <= (div_queue) ? quotient : remainder;
+        else                out <= I_out;
     end
 
 endmodule

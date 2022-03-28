@@ -1,7 +1,5 @@
 `timescale 1ns/1ns
 
-`include "/home/stefan/Desktop/Verilog/custom_riscV_cpu/CLA_adder_32/cla_adder_32.v"
-
 
 module int_div_32(  input                        clk_i,
                     input                        load_i,
