@@ -34,6 +34,8 @@ module riscv_custom( input clk, input reset);
     wire [`WL:0]   PC_EX;
     wire [  3:0]   reg_write_input_EX;
     wire [ 19:0]   instruction_pipe_reg_EX; // {rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
+    wire [ 19:0]   mul_instruction_pipe_reg_EX [2:0]; // {rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
+    wire [ 20:0]   div_instruction_pipe_reg_EX; // {valid_bit[20],rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
 
     wire [`WL:0]   ALU_result_MEM;
     wire [`WL:0]   mem_result_MEM;
@@ -124,7 +126,9 @@ module riscv_custom( input clk, input reset);
                             .reg_write_input_EX( reg_write_input_EX ),
                             .alu_result( alu_result ),
                             .take_branch( take_branch ),
-                            .instruction_pipe_reg_EX( instruction_pipe_reg_EX )
+                            .instruction_pipe_reg_EX( instruction_pipe_reg_EX ),
+                            .mul_instruction_pipe_reg_EX( mul_instruction_pipe_reg_EX ),
+                            .div_instruction_pipe_reg_EX( div_instruction_pipe_reg_EX )
                             );
 
 
@@ -164,6 +168,8 @@ module riscv_custom( input clk, input reset);
                     .instruction_pipe_reg_DE_i( instruction_pipe_reg_DE ),
                     .instruction_pipe_reg_EX_i( instruction_pipe_reg_EX ),
                     .instruction_pipe_reg_MEM_i( instruction_pipe_reg_MEM ),
+                    .mul_instruction_pipe_reg_EX( mul_instruction_pipe_reg_EX ),
+                    .div_instruction_pipe_reg_EX( div_instruction_pipe_reg_EX ),
                     
                     .forward_rs1_MEM_EX_o( forward_rs1_MEM_EX ),
                     .forward_rs2_MEM_EX_o( forward_rs2_MEM_EX ),
@@ -492,8 +498,9 @@ module exec_stage(  input clk,
                     output reg [`WL:0]  PC_EX,
                     output reg          data_mem_cs_EX, data_mem_wr_EX,
                     output reg [  3:0]  reg_write_input_EX,
-                    output reg [ 19:0]  instruction_pipe_reg_EX, // {rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
-                    
+                    output reg [ 19:0]  instruction_pipe_reg_EX, // {rs2[19:15], funct3[14:12], rd_idx[11:7], opcode[6:0]}
+                    output reg [ 19:0]  mul_instruction_pipe_reg_EX [2:0], // {rs2[19:15], funct3[14:12], rd_idx[11:7], opcode[6:0]}
+                    output reg [ 20:0]  div_instruction_pipe_reg_EX, // {valid bit[20], rs2[19:15], funct3[14:12], rd_idx[11:7], opcode[6:0]}
                     
                     output     [`WL:0]  alu_result,
                     output              take_branch
@@ -505,8 +512,6 @@ module exec_stage(  input clk,
     wire [`WL:0] forwarded_rs1_data, forwarded_rs2_data;
     wire [  2:0] alu_result_type;
 
-    reg  [ 19:0] mul_instruction_pipe_reg [2:0];
-    reg  [ 19:0] div_instruction_pipe_reg;
 
     assign forwarded_rs1_data = (forward_rs1_MEM_EX) ? forwarded_data_MEM : forwarded_data_WB;
     assign forwarded_rs2_data = (forward_rs2_MEM_EX) ? forwarded_data_MEM : forwarded_data_WB;
@@ -527,8 +532,8 @@ module exec_stage(  input clk,
 
     always @(negedge clk)
     begin
-        instruction_pipe_reg_EX     <=  ( {20{alu_result_type[2]}} & div_instruction_pipe_reg) | 
-                                        ( {20{alu_result_type[1]}} & div_instruction_pipe_reg) | 
+        instruction_pipe_reg_EX     <=  ( {20{alu_result_type[2]}} & div_instruction_pipe_reg_EX[19:0] ) | 
+                                        ( {20{alu_result_type[1]}} & mul_instruction_pipe_reg_EX[2] ) | 
                                         ( {20{alu_result_type[0]}} & {instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]} );
         alu_result_EX               <= alu_result;
         data_mem_cs_EX              <= data_mem_cs_DE;
@@ -538,10 +543,11 @@ module exec_stage(  input clk,
         immediate_data_EX           <= immediate_data_DE;
         PC_EX                       <= PC_DE;
 
-        mul_instruction_pipe_reg[0] <= {instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]};
-        mul_instruction_pipe_reg[1] <= mul_instruction_pipe_reg[0];
-        mul_instruction_pipe_reg[2] <= mul_instruction_pipe_reg[1];
-        div_instruction_pipe_reg    <= (alu_op_DE[3:2] == 2'b11) ? {instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]} : div_instruction_pipe_reg;
+        mul_instruction_pipe_reg_EX[0]     <= {instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]};
+        mul_instruction_pipe_reg_EX[1]     <= mul_instruction_pipe_reg_EX[0];
+        mul_instruction_pipe_reg_EX[2]     <= mul_instruction_pipe_reg_EX[1];
+        div_instruction_pipe_reg_EX[19:0]  <= (alu_op_DE[3:2] == 2'b11) ? {instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]} : div_instruction_pipe_reg_EX[19:0];
+        div_instruction_pipe_reg_EX[20]    <= (alu_op_DE[3:2] == 2'b11) ? 1'b1 : ( (alu_result_type[2]) ? 1'b0 : div_instruction_pipe_reg_EX[20]);
     end
 
 endmodule
@@ -841,6 +847,8 @@ module control( input clk_i,
                 input [24:0] instruction_pipe_reg_DE_i,  // {rs2[24:20],rs1[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
                 input [19:0] instruction_pipe_reg_EX_i,  // {rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
                 input [14:0] instruction_pipe_reg_MEM_i, // {funct3[14:12],rd_idx[11:7],opcode[6:0]}
+                input [19:0] mul_instruction_pipe_reg_EX [2:0], // {rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
+                input [20:0] div_instruction_pipe_reg_EX, // {valid_bit[20],rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
                 
                 output forward_rs1_MEM_EX_o,
                 output forward_rs2_MEM_EX_o,
@@ -950,8 +958,8 @@ module RAW_interlock_logic( input [6:0] opcode_DE,
     assign opcode_cond_rs1    = (opcode_DE == 7'b0000011) & opcode_cond_IF_rs1;
     assign opcode_cond_rs2    = (opcode_DE == 7'b0000011) & opcode_cond_IF_rs2;
 
-    assign rs1_idx_cond       = rd_idx_DE == rs1_idx_IF;
-    assign rs2_idx_cond       = rd_idx_DE == rs2_idx_IF;
+    assign rs1_idx_cond       = rd_idx_DE == rs1_idx_IF & rd_idx_DE != 0;
+    assign rs2_idx_cond       = rd_idx_DE == rs2_idx_IF & rd_idx_DE != 0;
 
     assign stall_pipeline     = ( opcode_cond_rs1 & rs1_idx_cond ) | ( opcode_cond_rs2  & rs2_idx_cond );
 
