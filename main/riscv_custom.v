@@ -10,22 +10,18 @@ module riscv_custom( input clk, input reset);
     
     wire [`WL:0]   rd_data;
     wire [`WL:0]   rs1_data_DE;
-    wire [ 4:0]    rd_idx_DE;
     wire [`WL:0]   rs2_data_DE;
-    wire [ 4:0]    rs1_idx_DE;
-    wire [ 4:0]    rs2_idx_DE;
     wire [`WL:0]   branch_PC_DE;
+    wire [ 24:0]   instruction_pipe_reg_DE; // {rs2[24:20],rs1[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
     wire           branch_instruction_DE;
     wire           jump_instruction_DE;
     wire [`WL:0]   immediate_data_DE;
     wire           data_mem_cs_DE;
     wire           data_mem_wr_DE;
-    wire [ 2:0]    funct3_DE;
-    wire [ 6:0]    opcode_DE;
     wire [`WL:0]   alu_result;
     wire           PC_alu_input_DE;
     wire           immediate_alu_input_DE;
-    wire [  3:0]   reg_write_input_DE;
+    wire [  3:0]   reg_write_input_DE;      // 1000 mem, 0100 alu, 0010 immediate, 0001 PC, 0000 no write
     wire [`WL:0]   PC_DE;
     wire [  4:0]   alu_op_DE;
 
@@ -91,11 +87,7 @@ module riscv_custom( input clk, input reset);
                         .fetched_instruction_IF( fetched_instruction_IF ),
                         .PC_IF( PC_IF ),
                         
-                        .funct3_DE( funct3_DE ),
-                        .opcode_DE( opcode_DE ),
-                        .rd_idx_DE( rd_idx_DE ),
-                        .rs1_idx_DE( rs1_idx_DE ),
-                        .rs2_idx_DE( rs2_idx_DE ),
+                        .instruction_pipe_reg_DE( instruction_pipe_reg_DE ),
                         .jump_instruction_DE( jump_instruction_DE ),
                         .branch_instruction_DE( branch_instruction_DE ),
                         .PC_alu_input_DE( PC_alu_input_DE ),
@@ -298,9 +290,7 @@ module decode(  input           clk,
                 input [ 31:0]   fetched_instruction_IF,
                 input [`WL:0]   PC_IF,
                 
-                output reg [  2:0]  funct3_DE,
-                output reg [  6:0]  opcode_DE,
-                output reg [  4:0]  rd_idx_DE, rs1_idx_DE, rs2_idx_DE,
+                output reg [ 24:0]  instruction_pipe_reg_DE, // {rs2[24:20],rs1[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
                 output reg          jump_instruction_DE,
                 output reg          branch_instruction_DE,
                 output reg          PC_alu_input_DE,
@@ -322,16 +312,17 @@ module decode(  input           clk,
 
                                         //Sign Extend                                                                                                     x2
     assign branch_immediate_data = {{20{fetched_instruction_IF[31]}},fetched_instruction_IF[7],fetched_instruction_IF[30:25],fetched_instruction_IF[11:8],1'b0};
+
     assign opcode                = (interlock_stall | take_branch | jump_instruction_DE | branch_jump_stall_timer_q) ? 7'b0000000 : fetched_instruction_IF[6:0];
     assign funct3                = fetched_instruction_IF[14:12];
+    assign rd_idx                = fetched_instruction_IF[11:7];
+    assign rs1_idx               = fetched_instruction_IF[19:15];
+    assign rs2_idx               = fetched_instruction_IF[24:20];
 
     always @(negedge clk)
     begin
-        funct3_DE                 <= funct3; 
-        rd_idx_DE                 <= fetched_instruction_IF[11:7];
-        rs1_idx_DE                <= fetched_instruction_IF[19:15];
-        rs2_idx_DE                <= fetched_instruction_IF[24:20];
-        opcode_DE                 <= opcode;
+        instruction_pipe_reg_DE   <= {rs2_idx, rs1_idx, funct3, rd_idx, opcode}; //!!!!
+
         branch_PC_DE              <= PC_IF + branch_immediate_data;
         PC_DE                     <= PC_IF;
         branch_jump_stall_timer_q <= (take_branch | jump_instruction_DE);
@@ -504,10 +495,8 @@ endmodule
 module exec_stage(  input clk,
                     input [`WL:0]   rs1_data_DE, rs2_data_DE, immediate_data_DE,
                     input [`WL:0]   PC_DE,
-                    input [  4:0]   rd_idx_DE, rs2_idx_DE,
+                    input [ 24:0]   instruction_pipe_reg_DE, // {rs2[24:20],rs1[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
                     input [  4:0]   alu_op_DE,
-                    input [  6:0]   opcode_DE,
-                    input [  2:0]   funct3_DE,
                     input [`WL:0]   forwarded_data_MEM, forwarded_data_WB,
                     input           forward_rs1_MEM_EX, forward_rs2_MEM_EX, forward_rs1_WB_EX, forward_rs2_WB_EX,
                     input           data_mem_cs_DE, data_mem_wr_DE,
@@ -522,9 +511,8 @@ module exec_stage(  input clk,
                     output reg [`WL:0]  PC_EX,
                     output reg          data_mem_cs_EX, data_mem_wr_EX,
                     output reg [  3:0]  reg_write_input_EX,
-                    output reg [  4:0]  rd_idx_EX, rs2_idx_EX,
-                    output reg [  6:0]  opcode_EX,
-                    output reg [  2:0]  funct3_EX,
+                    output reg [ 19:0]  instruction_pipe_reg_EX, // {rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
+                    
                     
                     output     [`WL:0]  alu_result,
                     output              take_branch
@@ -553,15 +541,12 @@ module exec_stage(  input clk,
 
     always @(negedge clk)
     begin
+        instruction_pipe_reg_EX <= {instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]};
         alu_result_EX           <= alu_result;
         data_mem_cs_EX          <= data_mem_cs_DE;
         data_mem_wr_EX          <= data_mem_wr_DE;
         reg_write_input_EX      <= reg_write_input_DE;
         rs2_data_EX             <= rs2_data_DE;
-        rd_idx_EX               <= rd_idx_DE;
-        opcode_EX               <= opcode_DE;
-        funct3_EX               <= funct3_DE;
-        rs2_idx_EX              <= rs2_idx_DE;
         immediate_data_EX       <= immediate_data_DE;
         PC_EX                   <= PC_DE;
     end
@@ -574,6 +559,7 @@ module mem_stage(   input           clk,
                     input [`WL:0]   rs2_data_EX,
                     input           data_mem_cs_EX, data_mem_wr_EX,
                     input [  3:0]   reg_write_input_EX,
+                    input [ 19:0]   instruction_pipe_reg_EX, //{rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
                     input [  4:0]   rd_idx_EX,
                     input [  6:0]   opcode_EX,
                     input           forward_WB_MEM,
@@ -587,9 +573,7 @@ module mem_stage(   input           clk,
                     output reg  [`WL:0] PC_MEM,
                     output reg  [`WL:0] immediate_data_MEM,
                     output reg  [  3:0] reg_write_input_MEM,
-                    output reg  [  4:0] rd_idx_MEM,
-                    output reg  [  6:0] opcode_MEM,
-                    output reg  [  2:0] funct3_MEM
+                    output reg  [ 14:0] instruction_pipe_reg_MEM //{funct3[14:12],rd_idx[11:7],opcode[6:0]}
                     );
     
     wire [`WL:0] mem_in = (forward_WB_MEM) ? forwarded_data_WB : rs2_data_EX;
@@ -607,13 +591,11 @@ module mem_stage(   input           clk,
     always @(negedge clk)
     begin
         //mem_result_MEM    <= (data_mem_cs_EX & data_mem_wr_EX) ? mem_out : mem_result_MEM;
+        instruction_pipe_reg_MEM <= instruction_pipe_reg_EX[14:0];
         reg_write_input_MEM      <= reg_write_input_EX;
         PC_MEM                   <= PC_EX;
         alu_result_MEM           <= alu_result_EX;
-        rd_idx_MEM               <= rd_idx_EX;
-        opcode_MEM               <= opcode_EX;
         immediate_data_MEM       <= immediate_data_EX;
-        funct3_MEM               <= funct3_EX;
     end
 
 endmodule
@@ -992,16 +974,18 @@ module structural_interlock_logic(  input clk_i,
     wire       mul_instruction;
     wire       start_cnt;
     wire       div_stall;
+    wire       write_port_stall;
 
     reg  [ 5:0] div_counter;
     reg  [33:0] write_reg_port_usage;
 
-    assign div_instruction = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 0);
-    assign mul_instruction = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 1);
-    assign start_cnt       = (div_counter == 0 & div_instruction);
-    assign div_stall       = div_instruction & div_counter != 0;
+    assign div_instruction  = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 0);
+    assign mul_instruction  = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 1);
+    assign start_cnt        = (div_counter == 0 & div_instruction);
+    assign div_stall        = div_instruction & div_counter != 0;
+    assign write_port_stall = write_reg_port_usage[0] != 0;
 
-    assign stall_pipeline  = div_stall;
+    assign stall_pipeline   = div_stall & write_port_stall;
 
 
     always @(negedge clk_i) begin
@@ -1010,4 +994,13 @@ module structural_interlock_logic(  input clk_i,
         write_reg_port_usage[3]    <= ~RAW_stall & ~stall_pipeline & mul_instruction;
         write_reg_port_usage[33]   <= ~RAW_stall & ~stall_pipeline & div_instruction;
     end
+endmodule
+
+module WAW_hazard_check(input reg_write_input_DE,
+                        input reg_write_input_EX,
+                        input reg_write_input_MEM,
+
+                        
+                        )
+
 endmodule
