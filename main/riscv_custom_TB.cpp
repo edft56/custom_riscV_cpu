@@ -13,7 +13,7 @@ const bool trace = true;
 void simulate_DUT(){
     Vriscv_custom* top = new Vriscv_custom;
 
-    vluint64_t sim_time = 50;
+    vluint64_t sim_time = 70;
 
     
     Verilated::traceEverOn(true);
@@ -55,7 +55,8 @@ void simulate_DUT(){
 
 
 int main() {
-    assemble("test_assembly2.txt","ass_bin.dat",true,false);
+    //assemble("test_assembly2.txt","ass_bin.dat",true,false);
+    assemble("test_M.txt","ass_bin.dat",true,false);
     simulate_DUT();    
 
     return 0;

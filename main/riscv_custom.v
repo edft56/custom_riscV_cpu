@@ -513,6 +513,11 @@ module exec_stage(  input clk,
     wire [`WL:0] forwarded_rs1_data, forwarded_rs2_data;
     wire [  2:0] alu_result_type;
 
+    reg [5:0] mul_control_pipe_reg [2:0]; //{cs[5],wr[4],reg_write_input[3:0]}
+    reg [5:0] div_control_pipe_reg; //{cs[5],wr[4],reg_write_input[3:0]}
+
+    wire [5:0] control_regs; //{cs[5],wr[4],reg_write_input[3:0]}
+
 
     assign forwarded_rs1_data = (forward_rs1_MEM_EX) ? forwarded_data_MEM : forwarded_data_WB;
     assign forwarded_rs2_data = (forward_rs2_MEM_EX) ? forwarded_data_MEM : forwarded_data_WB;
@@ -531,15 +536,21 @@ module exec_stage(  input clk,
 
     assign take_branch = (branch_instruction_DE & branch_cond);
 
+    assign control_regs =   ( {6{alu_result_type[2]}} & mul_control_pipe_reg[2] ) | 
+                            ( {6{alu_result_type[1]}} & div_control_pipe_reg ) | 
+                            ( {6{alu_result_type[0]}} & {6{alu_op_DE[3:2] != 2'b11}} & {6{alu_op_DE[3:2] != 2'b10}} & {data_mem_cs_EX, data_mem_wr_EX, reg_write_input_EX} );
+
     always @(negedge clk)
     begin
         instruction_pipe_reg_EX     <=  ( {20{alu_result_type[2]}} & div_instruction_pipe_reg_EX[19:0] ) | 
                                         ( {20{alu_result_type[1]}} & mul_instruction_pipe_reg_EX[2][19:0] ) | 
                                         ( {20{alu_result_type[0]}} & {instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]} );
+        
+        data_mem_cs_EX              <= control_regs[5];
+        data_mem_wr_EX              <= control_regs[4];
+        reg_write_input_EX          <= control_regs[3:0];
+
         alu_result_EX               <= alu_result;
-        data_mem_cs_EX              <= data_mem_cs_DE;
-        data_mem_wr_EX              <= data_mem_wr_DE;
-        reg_write_input_EX          <= reg_write_input_DE;
         rs2_data_EX                 <= rs2_data_DE;
         immediate_data_EX           <= immediate_data_DE;
         PC_EX                       <= PC_DE;
@@ -547,8 +558,13 @@ module exec_stage(  input clk,
         mul_instruction_pipe_reg_EX[0]     <= {alu_op_DE[3:2] == 2'b10, instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]};
         mul_instruction_pipe_reg_EX[1]     <= mul_instruction_pipe_reg_EX[0];
         mul_instruction_pipe_reg_EX[2]     <= mul_instruction_pipe_reg_EX[1];
+        mul_control_pipe_reg[0]            <= {data_mem_cs_DE,data_mem_wr_DE,reg_write_input_DE};
+        mul_control_pipe_reg[1]            <= mul_control_pipe_reg[0];
+        mul_control_pipe_reg[2]            <= mul_control_pipe_reg[1];
+
         div_instruction_pipe_reg_EX[19:0]  <= (alu_op_DE[3:2] == 2'b11) ? {instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]} : div_instruction_pipe_reg_EX[19:0];
         div_instruction_pipe_reg_EX[20]    <= (alu_op_DE[3:2] == 2'b11) ? 1'b1 : ( (alu_result_type[2]) ? 1'b0 : div_instruction_pipe_reg_EX[20]);
+        div_control_pipe_reg               <= (alu_op_DE[3:2] == 2'b11) ? {data_mem_cs_DE,data_mem_wr_DE,reg_write_input_DE} : div_control_pipe_reg;
     end
 
 endmodule
@@ -703,7 +719,6 @@ module alu( input         clk,
         mul_queue[2:0] <= mul_queue[3:1]; // right shift
         mul_queue[3]   <= op[0]; 
         div_queue      <= (op[3:2] == 2'b11) ? op[1] : div_queue;
-        op_type        <= {div_done,mul_done,~div_done & ~mul_done};
     end
 
     always @*
@@ -733,6 +748,8 @@ module alu( input         clk,
         if(mul_done)        out = (mul_queue[0]) ? mul_out[63:32] : mul_out[31:0];
         else if (div_done)  out = (div_queue) ? quotient : remainder;
         else                out = I_out;
+
+        op_type        = {div_done,mul_done,~div_done & ~mul_done};
     end
 
 endmodule
@@ -897,7 +914,9 @@ module control( input clk_i,
                                 .rd_idx_DE( rd_idx_DE ),
                                 .mul_instruction_pipe_reg_EX( mul_instruction_pipe_reg_EX ),
                                 .div_instruction_pipe_reg_EX( div_instruction_pipe_reg_EX ),
-                                .alu_op_DE(alu_op_DE),
+                                .alu_op_DE( alu_op_DE ),
+                                .funct3_IF( fetched_instruction_IF_i[14:12] ),
+                                .funct7_IF( fetched_instruction_IF_i[31:25] ),
 
                                 .stall_pipeline( RAW_stall )
                                 );
@@ -945,6 +964,8 @@ module RAW_interlock_logic( input [6:0] opcode_DE,
                         input [4:0] rs1_idx_IF,
                         input [4:0] rs2_idx_IF,
                         input [4:0] rd_idx_DE,
+                        input [2:0] funct3_IF,
+                        input [6:0] funct7_IF,
                         input [20:0] mul_instruction_pipe_reg_EX [2:0], // {valid bit[20],rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
                         input [20:0] div_instruction_pipe_reg_EX, // {valid_bit[20],rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
                         input [4:0] alu_op_DE,
@@ -975,12 +996,22 @@ module RAW_interlock_logic( input [6:0] opcode_DE,
     wire div_cond;
     wire M_type_interlock;
 
-
     wire       mul_valid_bit [2:0];
     wire [4:0] mul_rd_idx    [2:0];
-
     wire       div_valid_bit;
     wire [4:0] div_rd_idx;
+
+    genvar i;
+    generate
+        for(i=0; i<3; i=i+1) begin
+            assign mul_valid_bit[i] = mul_instruction_pipe_reg_EX[i][20];
+            assign mul_rd_idx[i]    = mul_instruction_pipe_reg_EX[i][11:7];
+        end
+    endgenerate
+    assign div_valid_bit = div_instruction_pipe_reg_EX[20];
+    assign div_rd_idx    = div_instruction_pipe_reg_EX[11:7];
+
+    assign stall_pipeline = I_type_interlock | M_type_interlock;
 
     // I-TYPE INSTRUCTIONS RAW INTERLOCKS
     //                                  ALU_RR                      ALU_I                       LOAD                            STORE                   BRANCH
@@ -1002,25 +1033,24 @@ module RAW_interlock_logic( input [6:0] opcode_DE,
     assign opcode_cond_IF_rs1 = (opcode_IF == 7'b0110011)  | (opcode_IF == 7'b0010011)  | (opcode_IF == 7'b0000011)  | (opcode_IF == 7'b0100011) | (opcode_IF == 7'b1100011); 
     assign opcode_cond_IF_rs2 = (opcode_IF == 7'b0110011)  |                                                                                       (opcode_IF == 7'b1100011);
 
-    assign mul_op_DE          = alu_op_DE[3:2] == 2'b10;
-    assign div_op_DE          = alu_op_DE[3:2] == 2'b11;
+    assign mul_op_DE    = alu_op_DE[3:2] == 2'b10;
+    assign div_op_DE    = alu_op_DE[3:2] == 2'b11;
 
-    assign div_op_IF  = (opcode_IF == 7'b0110011) & (funct7_IF == 7'b0000001) & (funct3_IF[2] == 0);
-    assign mul_op_IF  = (opcode_IF == 7'b0110011) & (funct7_IF == 7'b0000001) & (funct3_IF[2] == 1);
+    assign div_op_IF    = (opcode_IF == 7'b0110011) & (funct7_IF == 7'b0000001) & (funct3_IF[2] == 0);
+    assign mul_op_IF    = (opcode_IF == 7'b0110011) & (funct7_IF == 7'b0000001) & (funct3_IF[2] == 1);
 
-    assign DE_cond_rs1    = (rs1_idx_IF != 0) & (rs1_idx_IF == rd_idx_DE) & (opcode_cond_IF_rs1 & (mul_op_DE | div_op_DE)) & ~(mul_op_DE & mul_op_IF);
-    assign DE_cond_rs2    = (rs2_idx_IF != 0) & (rs2_idx_IF == rd_idx_DE) & (opcode_cond_IF_rs2 & (mul_op_DE | div_op_DE)) & ~(mul_op_DE & mul_op_IF);
+    assign DE_cond_rs1  = (rs1_idx_IF != 0) & (rs1_idx_IF == rd_idx_DE) & (opcode_cond_IF_rs1 & (mul_op_DE | div_op_DE)) & ~(mul_op_DE & mul_op_IF);
+    assign DE_cond_rs2  = (rs2_idx_IF != 0) & (rs2_idx_IF == rd_idx_DE) & (opcode_cond_IF_rs2 & (mul_op_DE | div_op_DE)) & ~(mul_op_DE & mul_op_IF);
 
-    genvar i;
     generate
         for(i=0; i<3; i=i+1) begin
-            assign mul_cond_rs1[i]    = (rs1_idx_IF != 0) & (rs1_idx_IF == mul_rd_idx[i]) & (opcode_cond_IF_rs1 ) & ~mul_op_IF;
-            assign mul_cond_rs2[i]    = (rs2_idx_IF != 0) & (rs2_idx_IF == mul_rd_idx[i]) & (opcode_cond_IF_rs2 ) & ~mul_op_IF;
+            assign mul_cond_rs1[i] = (rs1_idx_IF != 0) & (rs1_idx_IF == mul_rd_idx[i]) & (opcode_cond_IF_rs1 ) & ~mul_op_IF & ~mul_valid_bit[i];
+            assign mul_cond_rs2[i] = (rs2_idx_IF != 0) & (rs2_idx_IF == mul_rd_idx[i]) & (opcode_cond_IF_rs2 ) & ~mul_op_IF & ~mul_valid_bit[i];
         end
     endgenerate
 
-    assign div_cond_rs1[i]    = (rs1_idx_IF != 0) & (rs1_idx_IF == div_rd_idx) & (opcode_cond_IF_rs1 ) & ~div_op_IF;
-    assign div_cond_rs2[i]    = (rs2_idx_IF != 0) & (rs2_idx_IF == div_rd_idx) & (opcode_cond_IF_rs2 ) & ~div_op_IF;
+    assign div_cond_rs1 = (rs1_idx_IF != 0) & (rs1_idx_IF == div_rd_idx) & (opcode_cond_IF_rs1 ) & ~div_op_IF & ~div_valid_bit;
+    assign div_cond_rs2 = (rs2_idx_IF != 0) & (rs2_idx_IF == div_rd_idx) & (opcode_cond_IF_rs2 ) & ~div_op_IF & ~div_valid_bit;
     
     generate
         for(i=0; i<3; i=i+1) begin
@@ -1031,7 +1061,7 @@ module RAW_interlock_logic( input [6:0] opcode_DE,
     assign div_cond = div_cond_rs1 | div_cond_rs2;
     assign DE_cond  = DE_cond_rs1 | DE_cond_rs2;
 
-    assign M_type_interlock   = div_cond | mul_cond | DE_cond;
+    assign M_type_interlock = div_cond | mul_cond | DE_cond;
 
 endmodule
 
