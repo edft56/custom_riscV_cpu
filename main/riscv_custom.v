@@ -538,7 +538,7 @@ module exec_stage(  input clk,
 
     assign control_regs =   ( {6{alu_result_type[2]}} & mul_control_pipe_reg[2] ) | 
                             ( {6{alu_result_type[1]}} & div_control_pipe_reg ) | 
-                            ( {6{alu_result_type[0]}} & {6{alu_op_DE[3:2] != 2'b11}} & {6{alu_op_DE[3:2] != 2'b10}} & {data_mem_cs_EX, data_mem_wr_EX, reg_write_input_EX} );
+                            ( {6{alu_result_type[0]}} & {6{alu_op_DE[3:2] != 2'b11}} & {6{alu_op_DE[3:2] != 2'b10}} & {data_mem_cs_EX, data_mem_wr_EX, reg_write_input_DE} );
 
     always @(negedge clk)
     begin
