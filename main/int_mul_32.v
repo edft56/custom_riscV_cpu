@@ -10,7 +10,7 @@ module int_mul_32(  input                                      clk,
                             input      [OPERAND_SIZE-1   : 0]            Y,
                         
                             output reg                        result_rdy,
-                            output reg [2*OPERAND_SIZE-1 : 0] Result
+                            output     [2*OPERAND_SIZE-1 : 0] Result
                             );
     parameter OPERAND_SIZE = 32;
                                               //Pipe Stages
@@ -20,7 +20,7 @@ module int_mul_32(  input                                      clk,
     wire [2*OPERAND_SIZE-1 : 0] stage_result    [2:0];
     wire                        signed_mul      [2:0];
 
-    reg  [               3 : 0] pipe_state;
+    reg  [               2 : 0] pipe_state;
 
 
     first_pipe_stage #( .OPERAND_SIZE(OPERAND_SIZE),
@@ -90,8 +90,8 @@ module int_mul_32(  input                                      clk,
 
     always @(negedge clk)
     begin
-        pipe_state[2:0] <= pipe_state[3:1];
-        pipe_state[3]   <= (start) ? 1'b1 : 1'b0;
+        pipe_state[1:0] <= pipe_state[2:1];
+        pipe_state[2]   <= (start) ? 1'b1 : 1'b0;
         result_rdy      <= pipe_state[0];
     end
 
@@ -265,9 +265,9 @@ module third_pipe_stage(    input clk_i,
                     .Cout()
                     );
 
-    always @(negedge clk_i) begin
-        stage_result_o[RESULT_INDEX-1   :            0] <= stage_result_i[RESULT_INDEX-1 : 0];
-        stage_result_o[2*OPERAND_SIZE-1 : RESULT_INDEX] <= stage_result;
+    always @* begin
+        stage_result_o[RESULT_INDEX-1   :            0] = stage_result_i[RESULT_INDEX-1 : 0];
+        stage_result_o[2*OPERAND_SIZE-1 : RESULT_INDEX] = stage_result;
     end
 endmodule
 

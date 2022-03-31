@@ -5,7 +5,12 @@ addi 	t3,   x0,   3
 addi 	t4,   x0,   4
 addi 	t5,   x0,   5
 addi 	t6,   x0,   6
-div     a3,   t6,   t2
-mul     a0,   t0,   t2
+addi    s0,   x0,   1024
+addi    s1,   x0,   1024
+mul     a0,   t1,   t2
 mul     a1,   t2,   t5
 mulh    a2,   t3,   t6
+mul     a3,   t3,   t5
+add     a5,   a3,   a3
+mulh    a4,   s1,   s0
+div     a3,   t6,   t2

@@ -544,7 +544,7 @@ module exec_stage(  input clk,
     begin
         instruction_pipe_reg_EX     <=  ( {20{alu_result_type[2]}} & div_instruction_pipe_reg_EX[19:0] ) | 
                                         ( {20{alu_result_type[1]}} & mul_instruction_pipe_reg_EX[2][19:0] ) | 
-                                        ( {20{alu_result_type[0]}} & {instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]} );
+                                        ( {20{alu_result_type[0]}} & {20{alu_op_DE[3:2] != 2'b11}} & {20{alu_op_DE[3:2] != 2'b10}} & {instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]} );
         
         data_mem_cs_EX              <= control_regs[5];
         data_mem_wr_EX              <= control_regs[4];
@@ -671,8 +671,8 @@ module alu( input         clk,
 
     // because we check for structural hazards and for overlapping outputs during ID, just need to check if unit result rdy
     // and then select the proper output. In correct operation, there won't be an output ready from adder + multipler for example
-    reg          mul_queue      [3:0]; //stores if upper or lower should be selected (0 lower, 1 upper)
-    reg          div_queue;            //stores if quotient or remainder should be selected (0 quotient, 1 remainder)
+    reg [  2:0] mul_queue; //stores if upper or lower should be selected (0 lower, 1 upper)
+    reg         div_queue; //stores if quotient or remainder should be selected (0 quotient, 1 remainder)
 
 
     assign eq_int = in1 == in2;
@@ -716,8 +716,8 @@ module alu( input         clk,
 
     always @(negedge clk)
     begin
-        mul_queue[2:0] <= mul_queue[3:1]; // right shift
-        mul_queue[3]   <= op[0]; 
+        mul_queue[1:0] <= mul_queue[2:1]; // right shift
+        mul_queue[2]   <= op[0]; 
         div_queue      <= (op[3:2] == 2'b11) ? op[1] : div_queue;
     end
 
@@ -1044,13 +1044,13 @@ module RAW_interlock_logic( input [6:0] opcode_DE,
 
     generate
         for(i=0; i<3; i=i+1) begin
-            assign mul_cond_rs1[i] = (rs1_idx_IF != 0) & (rs1_idx_IF == mul_rd_idx[i]) & (opcode_cond_IF_rs1 ) & ~mul_op_IF & ~mul_valid_bit[i];
-            assign mul_cond_rs2[i] = (rs2_idx_IF != 0) & (rs2_idx_IF == mul_rd_idx[i]) & (opcode_cond_IF_rs2 ) & ~mul_op_IF & ~mul_valid_bit[i];
+            assign mul_cond_rs1[i] = (rs1_idx_IF != 0) & (rs1_idx_IF == mul_rd_idx[i]) & (opcode_cond_IF_rs1 ) & ~mul_op_IF & mul_valid_bit[i];
+            assign mul_cond_rs2[i] = (rs2_idx_IF != 0) & (rs2_idx_IF == mul_rd_idx[i]) & (opcode_cond_IF_rs2 ) & ~mul_op_IF & mul_valid_bit[i];
         end
     endgenerate
 
-    assign div_cond_rs1 = (rs1_idx_IF != 0) & (rs1_idx_IF == div_rd_idx) & (opcode_cond_IF_rs1 ) & ~div_op_IF & ~div_valid_bit;
-    assign div_cond_rs2 = (rs2_idx_IF != 0) & (rs2_idx_IF == div_rd_idx) & (opcode_cond_IF_rs2 ) & ~div_op_IF & ~div_valid_bit;
+    assign div_cond_rs1 = (rs1_idx_IF != 0) & (rs1_idx_IF == div_rd_idx) & (opcode_cond_IF_rs1 ) & ~div_op_IF & div_valid_bit;
+    assign div_cond_rs2 = (rs2_idx_IF != 0) & (rs2_idx_IF == div_rd_idx) & (opcode_cond_IF_rs2 ) & ~div_op_IF & div_valid_bit;
     
     generate
         for(i=0; i<3; i=i+1) begin
