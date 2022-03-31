@@ -9,7 +9,7 @@ module int_mul_32(  input                                      clk,
                             input      [OPERAND_SIZE-1   : 0]            X,
                             input      [OPERAND_SIZE-1   : 0]            Y,
                         
-                            output reg                        result_rdy,
+                            output                            result_rdy,
                             output     [2*OPERAND_SIZE-1 : 0] Result
                             );
     parameter OPERAND_SIZE = 32;
@@ -88,11 +88,13 @@ module int_mul_32(  input                                      clk,
                         .stage_result_o(Result)
                         );
 
+    
+    assign result_rdy = pipe_state[0];
+
     always @(negedge clk)
     begin
         pipe_state[1:0] <= pipe_state[2:1];
         pipe_state[2]   <= (start) ? 1'b1 : 1'b0;
-        result_rdy      <= pipe_state[0];
     end
 
 endmodule
