@@ -198,10 +198,13 @@ module instructionFetch(input clk_i,
     reg [ 31:0] instruction_buffer_q [1:0];
     reg [ 31:0] PC_buffer_q [1:0];
     reg         after_interlock_stall_q;
+    reg [  2:0] state;
     
     wire [ 31:0] mem_instruction;
 
     wire [`WL:0] mem_addr = (jump_instruction_DE) ? {jump_PC_i[31:1],1'b0} : ( (take_branch_i) ? branch_PC_i : PC_q );
+
+    initial state = 3'b001;
 
 
     memory #(
@@ -227,132 +230,88 @@ module instructionFetch(input clk_i,
 
     always @(negedge clk_i)
     begin
-        if(!reset_i)  begin   
-            PC_q                    <= 0;
-            after_interlock_stall_q <= 0;
-            instruction_buffer_q[0] <= 0;
-            instruction_buffer_q[1] <= 0;
-        end
-        else if (take_branch_i | jump_instruction_DE)  begin
-            PC_q                    <= mem_addr + 4;
-            after_interlock_stall_q <= 0;
-            instruction_buffer_q[0] <= mem_instruction;
-            instruction_buffer_q[1] <= mem_instruction;
-            PC_buffer_q[0]          <= PC_q;
-            PC_buffer_q[1]          <= PC_q;
-        end
-        else if (interlock_stall_i)  begin
-            PC_q                    <= PC_q;
-            after_interlock_stall_q <= 1;
-            instruction_buffer_q[0] <= instruction_buffer_q[1];
-            instruction_buffer_q[1] <= mem_instruction;
-            PC_buffer_q[0]          <= PC_buffer_q[1];
-            PC_buffer_q[1]          <= PC_q;
-        end
-        else if (after_interlock_stall_q) begin
-            PC_q                    <= PC_q + 4;
-            after_interlock_stall_q <= 0;
-            instruction_buffer_q[0] <= instruction_buffer_q[1];
-            instruction_buffer_q[1] <= mem_instruction;
-            PC_buffer_q[0]          <= PC_buffer_q[1];
-            PC_buffer_q[1]          <= PC_q;
-        end
-        else begin
-            PC_q                    <= PC_q + 4;
-            after_interlock_stall_q <= 0;
-            instruction_buffer_q[0] <= mem_instruction;
-            instruction_buffer_q[1] <= mem_instruction;
-            PC_buffer_q[0]          <= PC_q;
-            PC_buffer_q[1]          <= PC_q;
-        end 
-    end
-
-    always @(negedge clk_i)
-    begin
-        case( state )
-            2'b00: begin
+        case( state ) // NEED TO ADD RESETS TO ALL STATES
+            3'b001: begin // reset state
                 if(!reset_i)  begin   
                     PC_q                    <= 0;
-                    after_interlock_stall_q <= 0;
                     instruction_buffer_q[0] <= 0;
                     instruction_buffer_q[1] <= 0;
                     PC_buffer_q[0]          <= 0;
                     PC_buffer_q[1]          <= 0;
 
-                    state                   <= 0;
+                    state                   <= state;
                 end
                 else begin
                     PC_q                    <= PC_q + 4;
-                    after_interlock_stall_q <= 0;
                     instruction_buffer_q[0] <= mem_instruction;
                     instruction_buffer_q[1] <= mem_instruction;
                     PC_buffer_q[0]          <= PC_q;
                     PC_buffer_q[1]          <= PC_q;
 
-                    state                   <= 2'b01;
+                    state                   <= 3'b010;
                 end
             end
-            2'b01: begin
+            3'b010: begin // normal state
                 if (take_branch_i | jump_instruction_DE)  begin
                     PC_q                    <= mem_addr + 4;
-                    after_interlock_stall_q <= 0;
                     instruction_buffer_q[0] <= mem_instruction;
                     instruction_buffer_q[1] <= mem_instruction;
                     PC_buffer_q[0]          <= PC_q;
                     PC_buffer_q[1]          <= PC_q;
+
+                    state                   <= state;
                 end
                 else if (interlock_stall_i)  begin
                     PC_q                    <= PC_q;
-                    after_interlock_stall_q <= 1;
                     instruction_buffer_q[0] <= instruction_buffer_q[1];
                     instruction_buffer_q[1] <= mem_instruction;
                     PC_buffer_q[0]          <= PC_buffer_q[1];
                     PC_buffer_q[1]          <= PC_q;
+
+                    state                   <= 3'b100;
+                end
+                else begin
+                    PC_q                    <= PC_q + 4;
+                    instruction_buffer_q[0] <= mem_instruction;
+                    instruction_buffer_q[1] <= mem_instruction;
+                    PC_buffer_q[0]          <= PC_q;
+                    PC_buffer_q[1]          <= PC_q;
+
+                    state                   <= state;
                 end
             end
-            2'b10: begin
-            end
-            2'b11: begin
+            3'b100: begin // interlock state
+                if (interlock_stall_i)  begin
+                    PC_q                    <= PC_q;
+                    instruction_buffer_q[0] <= instruction_buffer_q[0];
+                    instruction_buffer_q[1] <= instruction_buffer_q[1];
+                    PC_buffer_q[0]          <= PC_buffer_q[0];
+                    PC_buffer_q[1]          <= PC_buffer_q[1];
+
+                    state                   <= state;
+                end
+                else begin
+                    PC_q                    <= PC_q + 4;
+                    after_interlock_stall_q <= 0;
+                    instruction_buffer_q[0] <= instruction_buffer_q[1];
+                    instruction_buffer_q[1] <= mem_instruction;
+                    PC_buffer_q[0]          <= PC_buffer_q[1];
+                    PC_buffer_q[1]          <= PC_q;
+
+                    state                   <= 3'b010;
+                    end
+                end
+            default: begin
+                    PC_q                    <= 0;
+                    instruction_buffer_q[0] <= 0;
+                    instruction_buffer_q[1] <= 0;
+                    PC_buffer_q[0]          <= 0;
+                    PC_buffer_q[1]          <= 0;
+
+                    state                   <= 3'b001;
             end
         endcase
-        if(!reset_i)  begin   
-            PC_q                    <= 0;
-            after_interlock_stall_q <= 0;
-            instruction_buffer_q[0] <= 0;
-            instruction_buffer_q[1] <= 0;
-        end
-        else if (take_branch_i | jump_instruction_DE)  begin
-            PC_q                    <= mem_addr + 4;
-            after_interlock_stall_q <= 0;
-            instruction_buffer_q[0] <= mem_instruction;
-            instruction_buffer_q[1] <= mem_instruction;
-            PC_buffer_q[0]          <= PC_q;
-            PC_buffer_q[1]          <= PC_q;
-        end
-        else if (interlock_stall_i)  begin
-            PC_q                    <= PC_q;
-            after_interlock_stall_q <= 1;
-            instruction_buffer_q[0] <= instruction_buffer_q[1];
-            instruction_buffer_q[1] <= mem_instruction;
-            PC_buffer_q[0]          <= PC_buffer_q[1];
-            PC_buffer_q[1]          <= PC_q;
-        end
-        else if (after_interlock_stall_q) begin
-            PC_q                    <= PC_q + 4;
-            after_interlock_stall_q <= 0;
-            instruction_buffer_q[0] <= instruction_buffer_q[1];
-            instruction_buffer_q[1] <= mem_instruction;
-            PC_buffer_q[0]          <= PC_buffer_q[1];
-            PC_buffer_q[1]          <= PC_q;
-        end
-        else begin
-            PC_q                    <= PC_q + 4;
-            after_interlock_stall_q <= 0;
-            instruction_buffer_q[0] <= mem_instruction;
-            instruction_buffer_q[1] <= mem_instruction;
-            PC_buffer_q[0]          <= PC_q;
-            PC_buffer_q[1]          <= PC_q;
-        end 
+        
     end
 
 endmodule
@@ -600,6 +559,8 @@ module exec_stage(  input clk,
     wire [`WL:0] alu_input1;
     wire [`WL:0] forwarded_rs1_data, forwarded_rs2_data;
     wire [  2:0] alu_result_type;
+    wire mul_instruction;
+    wire div_instruction;
 
     reg [5:0] mul_control_pipe_reg [2:0]; //{cs[5],wr[4],reg_write_input[3:0]}
     reg [5:0] div_control_pipe_reg; //{cs[5],wr[4],reg_write_input[3:0]}
@@ -612,6 +573,9 @@ module exec_stage(  input clk,
 
     assign alu_input1 = (forward_rs1_MEM_EX | forward_rs1_WB_EX) ? forwarded_rs1_data : ( (PC_alu_input_DE)        ? PC_DE             : rs1_data_DE );
     assign alu_input2 = (forward_rs2_MEM_EX | forward_rs2_WB_EX) ? forwarded_rs2_data : ( (immediate_alu_input_DE) ? immediate_data_DE : rs2_data_DE );
+
+    assign mul_instruction = (instruction_pipe_reg_DE[6:0] == 7'b0110011) & (alu_op_DE[3:2] == 2'b10);
+    assign div_instruction = (instruction_pipe_reg_DE[6:0] == 7'b0110011) & (alu_op_DE[3:2] == 2'b11);
 
     alu alu_unit(   .clk(clk),
                     .in1(alu_input1),
@@ -626,13 +590,13 @@ module exec_stage(  input clk,
 
     assign control_regs =   ( {6{alu_result_type[2]}} & div_control_pipe_reg ) | 
                             ( {6{alu_result_type[1]}} & mul_control_pipe_reg[2] )    | 
-                            ( {6{alu_result_type[0]}} & {6{alu_op_DE[3:2] != 2'b11}} & {6{alu_op_DE[3:2] != 2'b10}} & {data_mem_cs_EX, data_mem_wr_EX, reg_write_input_DE} );
+                            ( {6{alu_result_type[0]}} & {6{~mul_instruction}} & {6{~div_instruction}} & {data_mem_cs_DE, data_mem_wr_DE, reg_write_input_DE} );
 
     always @(negedge clk)
     begin
         instruction_pipe_reg_EX     <=  ( {20{alu_result_type[2]}} & div_instruction_pipe_reg_EX[19:0] )    | 
                                         ( {20{alu_result_type[1]}} & mul_instruction_pipe_reg_EX[2][19:0] ) | 
-                                        ( {20{alu_result_type[0]}} & {20{alu_op_DE[3:2] != 2'b11}} & {20{alu_op_DE[3:2] != 2'b10}} & {instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]} );
+                                        ( {20{alu_result_type[0]}} & {20{~mul_instruction}} & {20{~div_instruction}} & {instruction_pipe_reg_DE[24:20], instruction_pipe_reg_DE[14:0]} );
         
         data_mem_cs_EX              <= control_regs[5];
         data_mem_wr_EX              <= control_regs[4];
@@ -834,7 +798,7 @@ module alu( input         clk,
         endcase
 
         if(mul_done)        out = (mul_queue[0]) ? mul_out[63:32] : mul_out[31:0];
-        else if (div_done)  out = (div_queue) ? quotient : remainder;
+        else if (div_done)  out = (div_queue) ? remainder : quotient;
         else                out = I_out;
 
         op_type        = {div_done,mul_done,~div_done & ~mul_done};
@@ -1149,40 +1113,40 @@ module RAW_interlock_logic( input [6:0] opcode_DE,
 
 endmodule
 
-module structural_interlock_logic(  input clk_i,
-                                    input [31:0] fetched_instruction_IF_i,
-                                    input RAW_stall,
+// module structural_interlock_logic(  input clk_i,
+//                                     input [31:0] fetched_instruction_IF_i,
+//                                     input RAW_stall,
                                     
-                                    output stall_pipeline);
+//                                     output stall_pipeline);
 
-    wire [6:0] opcode = fetched_instruction_IF_i[6:0];
-    wire [6:0] funct7 = fetched_instruction_IF_i[31:25];
-    wire [2:0] funct3 = fetched_instruction_IF_i[14:12];
-    wire       div_instruction;
-    wire       mul_instruction;
-    wire       start_cnt;
-    wire       div_stall;
-    wire       write_port_stall;
+//     wire [6:0] opcode = fetched_instruction_IF_i[6:0];
+//     wire [6:0] funct7 = fetched_instruction_IF_i[31:25];
+//     wire [2:0] funct3 = fetched_instruction_IF_i[14:12];
+//     wire       div_instruction;
+//     wire       mul_instruction;
+//     wire       start_cnt;
+//     wire       div_stall;
+//     wire       write_port_stall;
 
-    reg  [ 5:0] div_counter;
-    reg  [33:0] write_reg_port_usage;
+//     reg  [ 5:0] div_counter;
+//     reg  [33:0] write_reg_port_usage;
 
-    assign div_instruction  = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 1);
-    assign mul_instruction  = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 0);
-    assign start_cnt        = (div_counter == 0 & div_instruction);
-    assign div_stall        = div_instruction & div_counter != 0;
-    assign write_port_stall = write_reg_port_usage[0] != 0;
+//     assign div_instruction  = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 1);
+//     assign mul_instruction  = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 0);
+//     assign start_cnt        = (div_counter == 0 & div_instruction);
+//     assign div_stall        = div_instruction & div_counter != 0;
+//     assign write_port_stall = write_reg_port_usage[0] != 0;
 
-    assign stall_pipeline   = div_stall & write_port_stall;
+//     assign stall_pipeline   = div_stall & write_port_stall;
 
 
-    always @(negedge clk_i) begin
-        div_counter                <= ( (div_counter == 0 & start_cnt) | div_counter != 0 ) ? div_counter + 1 : div_counter;
-        write_reg_port_usage[32:0] <= write_reg_port_usage[33:1];
-        write_reg_port_usage[3]    <= ~RAW_stall & ~stall_pipeline & mul_instruction;
-        write_reg_port_usage[33]   <= ~RAW_stall & ~stall_pipeline & div_instruction;
-    end
-endmodule
+//     always @(negedge clk_i) begin
+//         div_counter                <= ( (div_counter == 0 & start_cnt) | div_counter != 0 ) ? div_counter + 1 : div_counter;
+//         write_reg_port_usage[32:0] <= write_reg_port_usage[33:1];
+//         write_reg_port_usage[3]    <= ~RAW_stall & ~stall_pipeline & mul_instruction;
+//         write_reg_port_usage[33]   <= ~RAW_stall & ~stall_pipeline & div_instruction;
+//     end
+// endmodule
 
 // module WAW_hazard_check(input reg_write_input_DE,
 //                         input reg_write_input_EX,
