@@ -930,6 +930,9 @@ module control( input clk_i,
                 );
     
     wire RAW_stall;
+    wire structural_stall;
+    wire WAW_stall;
+
     wire [ 6:0] opcode_DE  = instruction_pipe_reg_DE_i[ 6: 0];
     wire [ 4:0] rd_idx_DE  = instruction_pipe_reg_DE_i[11: 7];
     wire [ 4:0] rs1_idx_DE = instruction_pipe_reg_DE_i[19:15];
@@ -940,7 +943,7 @@ module control( input clk_i,
     wire [ 6:0] opcode_MEM = instruction_pipe_reg_MEM_i[ 6: 0];
     wire [ 4:0] rd_idx_MEM = instruction_pipe_reg_MEM_i[11: 7];
 
-    assign interlock_stall_o = RAW_stall;
+    assign interlock_stall_o = RAW_stall | structural_stall | WAW_stall;
 
 
     forwarding_logic fwd_logic( .opcode_DE( opcode_DE ),
@@ -972,6 +975,26 @@ module control( input clk_i,
 
                                 .stall_pipeline( RAW_stall )
                                 );
+
+    structural_interlock_logic struct_logic(.clk_i( clk_i ),
+                                            .fetched_instruction_IF_i( fetched_instruction_IF_i ),
+                                            .RAW_stall( RAW_stall ),
+                                                
+                                            .stall_pipeline( structural_stall )
+                                           );
+
+    WAW_hazard_check WAW_logic( .clk( clk_i ),
+                                .opcode_IF( fetched_instruction_IF_i[6:0] ),
+                                .funct3_IF( fetched_instruction_IF_i[14:12] ),
+                                .funct7_IF( fetched_instruction_IF_i[31:25] ),
+                                .rd_idx_IF( fetched_instruction_IF_i[11:7] ),
+                                .alu_op_DE( alu_op_DE ),
+                                .rd_idx_DE( rd_idx_DE ),
+                                .mul_instruction_pipe_reg_EX( mul_instruction_pipe_reg_EX ),
+                                .div_instruction_pipe_reg_EX( div_instruction_pipe_reg_EX ),
+
+                                .WAW_stall( WAW_stall )
+                            );
   
 endmodule
 
@@ -1113,46 +1136,81 @@ module RAW_interlock_logic( input [6:0] opcode_DE,
 
 endmodule
 
-// module structural_interlock_logic(  input clk_i,
-//                                     input [31:0] fetched_instruction_IF_i,
-//                                     input RAW_stall,
+module structural_interlock_logic(  input clk_i,
+                                    input [31:0] fetched_instruction_IF_i,
+                                    input RAW_stall,
                                     
-//                                     output stall_pipeline);
+                                    output stall_pipeline);
 
-//     wire [6:0] opcode = fetched_instruction_IF_i[6:0];
-//     wire [6:0] funct7 = fetched_instruction_IF_i[31:25];
-//     wire [2:0] funct3 = fetched_instruction_IF_i[14:12];
-//     wire       div_instruction;
-//     wire       mul_instruction;
-//     wire       start_cnt;
-//     wire       div_stall;
-//     wire       write_port_stall;
+    wire [6:0] opcode = fetched_instruction_IF_i[6:0];
+    wire [6:0] funct7 = fetched_instruction_IF_i[31:25];
+    wire [2:0] funct3 = fetched_instruction_IF_i[14:12];
+    wire       div_instruction;
+    wire       mul_instruction;
+    wire       start_cnt;
+    wire       div_stall;
+    wire       write_port_stall;
+    wire       reg_write_IF; // asserted if IF instruction writes to regfile
 
-//     reg  [ 5:0] div_counter;
-//     reg  [33:0] write_reg_port_usage;
-
-//     assign div_instruction  = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 1);
-//     assign mul_instruction  = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 0);
-//     assign start_cnt        = (div_counter == 0 & div_instruction);
-//     assign div_stall        = div_instruction & div_counter != 0;
-//     assign write_port_stall = write_reg_port_usage[0] != 0;
-
-//     assign stall_pipeline   = div_stall & write_port_stall;
+    reg  [ 5:0] div_counter;
+    reg  [33:0] write_reg_port_usage;
 
 
-//     always @(negedge clk_i) begin
-//         div_counter                <= ( (div_counter == 0 & start_cnt) | div_counter != 0 ) ? div_counter + 1 : div_counter;
-//         write_reg_port_usage[32:0] <= write_reg_port_usage[33:1];
-//         write_reg_port_usage[3]    <= ~RAW_stall & ~stall_pipeline & mul_instruction;
-//         write_reg_port_usage[33]   <= ~RAW_stall & ~stall_pipeline & div_instruction;
-//     end
-// endmodule
+    assign reg_write_IF     = (opcode==7'b0010011) | (opcode==7'b0000011) | (opcode==7'b0110011) | (opcode==7'b1101111) | (opcode==7'b1100111) | (opcode==7'b0110111) | (opcode==7'b0010111);
+    assign div_instruction  = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 1);
+    assign mul_instruction  = (opcode == 7'b0110011) & (funct7 == 7'b0000001) & (funct3[2] == 0);
+    assign start_cnt        = (div_counter == 0 & div_instruction);
+    assign div_stall        = div_instruction & div_counter != 0;
+    assign write_port_stall = (write_reg_port_usage[0] != 0) & ~mul_instruction & ~div_instruction & reg_write_IF; //NEED TO CHECK IF CURRENT INSTRUCTION WRITES TO REGISTERS       
 
-// module WAW_hazard_check(input reg_write_input_DE,
-//                         input reg_write_input_EX,
-//                         input reg_write_input_MEM,
+    assign stall_pipeline   = div_stall | write_port_stall;
 
-                        
-//                         )
 
-// endmodule
+    always @(negedge clk_i) begin
+        div_counter                <= ( (div_counter == 0 & start_cnt) | div_counter != 0 ) ? div_counter + 1 : div_counter;
+        write_reg_port_usage[32:0] <= write_reg_port_usage[33:1];
+        write_reg_port_usage[2]    <= ~RAW_stall & ~stall_pipeline & mul_instruction;
+        write_reg_port_usage[33]   <= ~RAW_stall & ~stall_pipeline & div_instruction;
+    end
+endmodule
+
+module WAW_hazard_check(input clk,
+                        input [6:0] opcode_IF,
+                        input [2:0] funct3_IF,
+                        input [6:0] funct7_IF,
+                        input [4:0] rd_idx_IF,
+                        //input [6:0] opcode_DE,
+                        input [4:0] alu_op_DE,
+                        input [4:0] rd_idx_DE,
+                        input [20:0] mul_instruction_pipe_reg_EX [2:0], // {valid bit[20],rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
+                        input [20:0] div_instruction_pipe_reg_EX, // {valid_bit[20],rs2[19:15],funct3[14:12],rd_idx[11:7],opcode[6:0]}
+
+                        output WAW_stall
+                        );
+
+    wire reg_write_IF;
+    wire div_op_IF;
+    wire mul_op_IF;
+    wire mul_op_DE;
+    wire div_op_DE;
+    wire DE_check;
+    wire mul1_check;
+    wire mul2_check;
+    wire div_check;
+
+    assign reg_write_IF =   (opcode_IF==7'b0010011) | (opcode_IF==7'b0000011) | (opcode_IF==7'b0110011) | 
+                            (opcode_IF==7'b1101111) | (opcode_IF==7'b1100111) | (opcode_IF==7'b0110111) | (opcode_IF==7'b0010111);
+
+    assign div_op_IF    =   (opcode_IF == 7'b0110011) & (funct7_IF == 7'b0000001) & (funct3_IF[2] == 1);
+    assign mul_op_IF    =   (opcode_IF == 7'b0110011) & (funct7_IF == 7'b0000001) & (funct3_IF[2] == 0);
+    assign mul_op_DE    =   alu_op_DE[3:2] == 2'b10;
+    assign div_op_DE    =   alu_op_DE[3:2] == 2'b11;
+
+    assign DE_check   = reg_write_IF & (rd_idx_IF == rd_idx_DE) & ( (~mul_op_IF & ~div_op_IF) & (mul_op_DE | div_op_DE) );
+    assign mul1_check = reg_write_IF & (rd_idx_IF == mul_instruction_pipe_reg_EX[0][11:7]) & ( (~mul_op_IF & ~div_op_IF) & (mul_instruction_pipe_reg_EX[0][20]) );
+    assign mul2_check = reg_write_IF & (rd_idx_IF == mul_instruction_pipe_reg_EX[1][11:7]) & ( (~mul_op_IF & ~div_op_IF) & (mul_instruction_pipe_reg_EX[1][20]) );
+    assign div_check  = reg_write_IF & (rd_idx_IF == div_instruction_pipe_reg_EX[11:7])    & (       (~div_op_IF)        & (div_instruction_pipe_reg_EX[20]   ) );
+
+    assign WAW_stall = DE_check | mul1_check | mul2_check | div_check;
+
+endmodule
