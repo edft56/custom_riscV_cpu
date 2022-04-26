@@ -1,0 +1,40 @@
+jalr	ra,	  x0,   32
+auipc	ra,	  8192
+lui		ra,	  999999
+addi	ra,   x0,   -1
+sb		ra,   0(x0)
+lbu		sp,	  0(x0)
+sh		ra,   0(x0)
+lhu		gp,	  0(x0)
+addi 	t0,	  x0,   0
+addi	t1,   x0,   1
+addi 	t2,   x0,   2
+addi 	t3,   x0,   3
+addi 	t4,   x0,   4
+addi 	t5,   x0,   5
+addi 	t6,   x0,   6
+sw		t6,   0(x0)
+lw		s11,  0(x0)
+add		s11,  s11,  s11
+add		a0,   t0,   t1
+add		a1,   t3,   t5
+sub 	a2,   a1,   a0
+sll		a3,   t2,   t1
+srl		a4,   t2,   t1
+xor		a5,   t1,   t5
+addi	a6,   t2,   7
+slti	a7,   t3,   -5
+sltiu   s0,   t3,   5
+xori	s1,   t3,   2
+ori		s2,   t3,   7
+andi	s3,   t3,   10
+slli	s4,   t3,   9
+srli	s5,   t3,   1
+addi	t6,   t3,   -19
+srai	s6,   t6,   1
+addi	t0,   t0,   420
+addi	t5,   t5,   69
+bne		t3,   t4,   -18
+addi	t3,	  t4,	100
+slli		t3,	  t3,	2
+
