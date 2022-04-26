@@ -1,10 +1,13 @@
 `timescale 1ns/1ns
 
 `define WL 31 //word length
-`define IMEM_SIZE 8*1024*1024
-`define DMEM_SIZE 8*1024*1024
+// `define IMEM_SIZE 8*1024*1024
+// `define DMEM_SIZE 8*1024*1024
 
-module riscv_custom( input clk, input reset);
+`define IMEM_SIZE 16*1024
+`define DMEM_SIZE 16*1024
+
+module riscv_custom( input clk, input reset, output [`WL:0] rd_data_out);
     wire [`WL:0]   PC_IF;
     wire [ 31:0]   fetched_instruction_IF;
     
@@ -178,7 +181,9 @@ module riscv_custom( input clk, input reset);
                     .forward_rs2_WB_EX_o( forward_rs2_WB_EX ),
                     .forward_WB_MEM_o( forward_WB_MEM ),
                     .interlock_stall_o( interlock_stall )
-                );                
+                );      
+
+    assign rd_data_out = rd_data;          
 
 endmodule
 
@@ -197,7 +202,6 @@ module instructionFetch(input clk_i,
     reg [`WL:0] PC_q;
     reg [ 31:0] instruction_buffer_q [1:0];
     reg [ 31:0] PC_buffer_q [1:0];
-    reg         after_interlock_stall_q;
     reg [  2:0] state;
     
     wire [ 31:0] mem_instruction;
@@ -292,7 +296,6 @@ module instructionFetch(input clk_i,
                 end
                 else begin
                     PC_q                    <= PC_q + 4;
-                    after_interlock_stall_q <= 0;
                     instruction_buffer_q[0] <= instruction_buffer_q[1];
                     instruction_buffer_q[1] <= mem_instruction;
                     PC_buffer_q[0]          <= PC_buffer_q[1];

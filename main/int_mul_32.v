@@ -292,7 +292,7 @@ module First_Stage( input                       signed_mul,
 
     HalfAdder1 HA1 ( (signed_mul) ? ~X[OPERAND_SIZE-2] : X[OPERAND_SIZE-2], Y[OPERAND_SIZE-2], Sum[OPERAND_SIZE-2], Cout[OPERAND_SIZE-2]);
 
-    HalfAdder1 HA2 ( (signed_mul) ? 1'b1 : 0'b0 , (signed_mul) ? ~Y[OPERAND_SIZE-1] : Y[OPERAND_SIZE-1], Sum[OPERAND_SIZE-1], Cout[OPERAND_SIZE-1]);
+    HalfAdder1 HA2 ( (signed_mul) ? 1'b1 : 1'b0 , (signed_mul) ? ~Y[OPERAND_SIZE-1] : Y[OPERAND_SIZE-1], Sum[OPERAND_SIZE-1], Cout[OPERAND_SIZE-1]);
 
 endmodule
 
